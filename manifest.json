@@ -1,0 +1,21 @@
+{
+  "name": "Volpony Delivery",
+  "short_name": "Volpony",
+  "description": "O app de pedidos de Arari",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#eefcf4",
+  "theme_color": "#00b341",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/7541/7541900.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/7541/7541900.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
