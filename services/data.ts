@@ -1,4 +1,5 @@
-import { Restaurant, GlobalSettings, User, Order, OrderStatus } from '../types';
+
+import { Restaurant, GlobalSettings, User, Order, OrderStatus, Category } from '../types';
 import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 
 // Chaves do "Banco de Dados" atualizadas para Volpony
@@ -9,12 +10,26 @@ const KEYS = {
   ORDERS: 'volpony_orders'
 };
 
+export const INITIAL_CATEGORIES: Category[] = [
+  { id: 'all', name: 'Tudo', icon: '🍽️' },
+  { id: 'taxi', name: 'Taxi / Moto', icon: '🚖' },
+  { id: 'pharmacy', name: 'Farmácia', icon: '💊' },
+  { id: 'healthy', name: 'Saudável', icon: '🥗' },
+  { id: 'snacks', name: 'Lanches', icon: '🍔' },
+  { id: 'pizza', name: 'Pizzaria', icon: '🍕' },
+  { id: 'japanese', name: 'Japonês', icon: '🍣' },
+  { id: 'acai', name: 'Açai', icon: '🍇' },
+  { id: 'drinks', name: 'Bebidas', icon: '🥤' },
+  { id: 'sweets', name: 'Doces', icon: '🍰' },
+];
+
 // --- DADOS INICIAIS (SEED) ---
 export const DEFAULT_SETTINGS: GlobalSettings = {
   siteFee: 2.00,
   appFee: 1.00,
-  minOrderValue: 0.00, // Global fallback set to 0 as restaurants now handle this
-  feeType: 'fixed'
+  minOrderValue: 0.00,
+  feeType: 'fixed',
+  categories: INITIAL_CATEGORIES
 };
 
 export const INITIAL_USERS: User[] = [
@@ -47,7 +62,7 @@ export const INITIAL_USERS: User[] = [
     username: 'taxista',
     password: '123',
     role: 'courier',
-    courierRestaurantIds: ['6'] // ID do Moto Táxi do João
+    courierRestaurantIds: ['6'] 
   },
   {
     id: 'customer1',
@@ -56,19 +71,6 @@ export const INITIAL_USERS: User[] = [
     password: '123',
     role: 'customer'
   }
-];
-
-export const CATEGORIES = [
-  { id: 'all', name: 'Tudo', icon: '🍽️' },
-  { id: 'taxi', name: 'Taxi / Moto', icon: '🚖' },
-  { id: 'pharmacy', name: 'Farmácia', icon: '💊' },
-  { id: 'healthy', name: 'Saudável', icon: '🥗' },
-  { id: 'snacks', name: 'Lanches', icon: '🍔' },
-  { id: 'pizza', name: 'Pizzaria', icon: '🍕' },
-  { id: 'japanese', name: 'Japonês', icon: '🍣' },
-  { id: 'acai', name: 'Açai', icon: '🍇' },
-  { id: 'drinks', name: 'Bebidas', icon: '🥤' },
-  { id: 'sweets', name: 'Doces', icon: '🍰' },
 ];
 
 export const INITIAL_RESTAURANTS: Restaurant[] = [
@@ -86,11 +88,12 @@ export const INITIAL_RESTAURANTS: Restaurant[] = [
     openingTime: '11:00',
     closingTime: '23:00',
     category: 'snacks',
+    active: true,
     image: 'https://images.unsplash.com/photo-1550547660-d9450f859349?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
     menu: [
-      { id: 'b1', name: 'Volpony Smash', description: 'Blend especial da casa, queijo prato, salada fresca e molho verde.', price: 29.90, image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80', popular: true },
-      { id: 'b2', name: 'Green Salad Burger', description: 'Hambúrguer de grão de bico, alface americana e tomate.', price: 26.50, image: 'https://images.unsplash.com/photo-1520072959219-c595dc870360?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80' },
-      { id: 'b3', name: 'Batata Rústica', description: 'Com alecrim e sal grosso.', price: 18.90, image: 'https://images.unsplash.com/photo-1605692659397-6d2c40c06173?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80', popular: true }
+      { id: 'b1', name: 'Volpony Smash', description: 'Blend especial da casa, queijo prato, salada fresca e molho verde.', price: 29.90, image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80', popular: true, active: true },
+      { id: 'b2', name: 'Green Salad Burger', description: 'Hambúrguer de grão de bico, alface americana e tomate.', price: 26.50, image: 'https://images.unsplash.com/photo-1520072959219-c595dc870360?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80', active: true },
+      { id: 'b3', name: 'Batata Rústica', description: 'Com alecrim e sal grosso.', price: 18.90, image: 'https://images.unsplash.com/photo-1605692659397-6d2c40c06173?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80', popular: true, active: true }
     ]
   },
   {
@@ -107,10 +110,11 @@ export const INITIAL_RESTAURANTS: Restaurant[] = [
     openingTime: '18:00',
     closingTime: '23:59',
     category: 'pizza',
+    active: true,
     image: 'https://images.unsplash.com/photo-1574071318508-1cdbab80d002?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
     menu: [
-      { id: 'p1', name: 'Marguerita Fresca', description: 'Molho artesanal, mussarela de búfala e manjericão gigante.', price: 48.00, image: 'https://images.unsplash.com/photo-1574071318508-1cdbab80d002?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80', popular: true },
-      { id: 'p2', name: 'Rúcula com Tomate Seco', description: 'Mussarela, rúcula fresca e tomate seco.', price: 52.00, image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80' }
+      { id: 'p1', name: 'Marguerita Fresca', description: 'Molho artesanal, mussarela de búfala e manjericão gigante.', price: 48.00, image: 'https://images.unsplash.com/photo-1574071318508-1cdbab80d002?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80', popular: true, active: true },
+      { id: 'p2', name: 'Rúcula com Tomate Seco', description: 'Mussarela, rúcula fresca e tomate seco.', price: 52.00, image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80', active: true }
     ]
   },
   {
@@ -127,10 +131,11 @@ export const INITIAL_RESTAURANTS: Restaurant[] = [
     openingTime: '19:00',
     closingTime: '23:30',
     category: 'japanese',
+    active: true,
     image: 'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
     menu: [
-      { id: 's1', name: 'Combo Volpony', description: '16 peças selecionadas pelo chef.', price: 65.90, image: 'https://images.unsplash.com/photo-1611143669185-af224c5e3252?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80', popular: true },
-      { id: 's2', name: 'Temaki Salmão Fresh', description: 'Salmão fresco com cream cheese e cebolinha.', price: 24.90, image: 'https://images.unsplash.com/photo-1502364271109-0a9a75a2a9df?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80' }
+      { id: 's1', name: 'Combo Volpony', description: '16 peças selecionadas pelo chef.', price: 65.90, image: 'https://images.unsplash.com/photo-1611143669185-af224c5e3252?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80', popular: true, active: true },
+      { id: 's2', name: 'Temaki Salmão Fresh', description: 'Salmão fresco com cream cheese e cebolinha.', price: 24.90, image: 'https://images.unsplash.com/photo-1502364271109-0a9a75a2a9df?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80', active: true }
     ]
   },
   {
@@ -147,10 +152,11 @@ export const INITIAL_RESTAURANTS: Restaurant[] = [
     openingTime: '10:00',
     closingTime: '20:00',
     category: 'healthy',
+    active: true,
     image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
     menu: [
-      { id: 'h1', name: 'Bowl Caesar', description: 'Alface romana, frango grelhado, croutons e molho caesar.', price: 32.00, image: 'https://images.unsplash.com/photo-1550304943-4f24f54ddde9?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80', popular: true },
-      { id: 'h2', name: 'Poke Havaiano', description: 'Arroz gohan, salmão, manga, pepino e alga.', price: 42.00, image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80' }
+      { id: 'h1', name: 'Bowl Caesar', description: 'Alface romana, frango grelhado, croutons e molho caesar.', price: 32.00, image: 'https://images.unsplash.com/photo-1550304943-4f24f54ddde9?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80', popular: true, active: true },
+      { id: 'h2', name: 'Poke Havaiano', description: 'Arroz gohan, salmão, manga, pepino e alga.', price: 42.00, image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80', active: true }
     ]
   },
   {
@@ -167,11 +173,12 @@ export const INITIAL_RESTAURANTS: Restaurant[] = [
     openingTime: '08:00',
     closingTime: '23:00',
     category: 'pharmacy',
+    active: true,
     image: 'https://images.unsplash.com/photo-1587854692152-cbe660dbde88?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
     menu: [
-      { id: 'ph1', name: 'Neosaldina 30 Drágeas', description: 'Para dor de cabeça e enxaqueca.', price: 22.90, image: 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80', popular: true },
-      { id: 'ph2', name: 'Vitamina C Efervescente', description: 'Tubo com 10 comprimidos. Imunidade em dia.', price: 15.50, image: 'https://images.unsplash.com/photo-1512069772995-ec65ed45afd6?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80' },
-      { id: 'ph3', name: 'Fralda Pampers M', description: 'Pacote com 28 unidades. Conforto total.', price: 45.90, image: 'https://images.unsplash.com/photo-1519689680058-324335c77eba?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80' }
+      { id: 'ph1', name: 'Neosaldina 30 Drágeas', description: 'Para dor de cabeça e enxaqueca.', price: 22.90, image: 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80', popular: true, active: true },
+      { id: 'ph2', name: 'Vitamina C Efervescente', description: 'Tubo com 10 comprimidos. Imunidade em dia.', price: 15.50, image: 'https://images.unsplash.com/photo-1512069772995-ec65ed45afd6?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80', active: true },
+      { id: 'ph3', name: 'Fralda Pampers M', description: 'Pacote com 28 unidades. Conforto total.', price: 45.90, image: 'https://images.unsplash.com/photo-1519689680058-324335c77eba?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80', active: true }
     ]
   },
   {
@@ -190,11 +197,12 @@ export const INITIAL_RESTAURANTS: Restaurant[] = [
     category: 'taxi',
     vehicleModel: 'Honda CG 160 Titan Vermelha',
     vehiclePlate: 'ABC-1234',
+    active: true,
     image: 'https://images.unsplash.com/photo-1558981403-c5f9899a28bc?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
     menu: [
-      { id: 't1', name: 'Corrida Local (Centro)', description: 'Levamos você a qualquer lugar do centro da cidade.', price: 7.00, image: 'https://images.unsplash.com/photo-1558981806-ec527fa84c3d?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80', popular: true },
-      { id: 't2', name: 'Corrida Bairros', description: 'Até 5km de distância do centro.', price: 12.00, image: 'https://images.unsplash.com/photo-1558981403-c5f9899a28bc?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80' },
-      { id: 't3', name: 'Serviço de Encomenda', description: 'Buscamos e levamos seu pacote pequeno.', price: 10.00, image: 'https://images.unsplash.com/photo-1585060544812-6b45742d762f?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80' }
+      { id: 't1', name: 'Corrida Local (Centro)', description: 'Levamos você a qualquer lugar do centro da cidade.', price: 7.00, image: 'https://images.unsplash.com/photo-1558981806-ec527fa84c3d?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80', popular: true, active: true },
+      { id: 't2', name: 'Corrida Bairros', description: 'Até 5km de distância do centro.', price: 12.00, image: 'https://images.unsplash.com/photo-1558981403-c5f9899a28bc?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80', active: true },
+      { id: 't3', name: 'Serviço de Encomenda', description: 'Buscamos e levamos seu pacote pequeno.', price: 10.00, image: 'https://images.unsplash.com/photo-1585060544812-6b45742d762f?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80', active: true }
     ]
   }
 ];
@@ -314,12 +322,11 @@ class DatabaseService {
       }
     } else {
       const { data, error } = await this.supabase
-        .from('volpony_data') // Usando uma tabela genérica ou específica se o script SQL foi rodado
+        .from('volpony_data') 
         .select('data')
         .eq('id', key)
         .single();
       
-      // Fallback para tabelas individuais se a tabela unificada não existir (retrocompatibilidade)
       if (error) {
            const tableName = key.replace('volpony_', '');
            const { data: legacyData, error: legacyError } = await this.supabase.from(tableName).select('data').eq('id', key).single();
@@ -344,32 +351,23 @@ class DatabaseService {
         console.error(`Erro ao salvar ${key}`, e);
       }
     } else {
-      // Tenta salvar na tabela antiga primeiro (para manter compatibilidade com o script antigo)
       const tableName = key.replace('volpony_', '');
       let { error } = await this.supabase
         .from(tableName)
         .upsert({ id: key, data: data }, { onConflict: 'id' });
 
-       // Se falhar (tabela não existe), tenta na nova estrutura se implementada
        if(error) console.error(`Supabase Save Error (${key}):`, error);
     }
   }
 
-  // --- ATOMIC ORDER UPDATE ---
-  // Esta função garante que a atualização de status não sobrescreva novos pedidos que entraram
   async updateOrder(orderId: string, updates: Partial<Order>): Promise<Order[]> {
-      // 1. Fetch Fresh Data
       const currentOrders = await this.getOrders();
-      
-      // 2. Modify locally
       const updatedOrders = currentOrders.map(o => {
           if (o.id === orderId) {
               return { ...o, ...updates };
           }
           return o;
       });
-
-      // 3. Save
       await this.saveOrders(updatedOrders);
       return updatedOrders;
   }
@@ -377,7 +375,10 @@ class DatabaseService {
   // --- API METHODS ---
 
   async getSettings(): Promise<GlobalSettings> {
-    return this.load(KEYS.SETTINGS, DEFAULT_SETTINGS);
+    const s = await this.load(KEYS.SETTINGS, DEFAULT_SETTINGS);
+    // Assegura que as categorias existam
+    if (!s.categories) s.categories = INITIAL_CATEGORIES;
+    return s;
   }
 
   async saveSettings(settings: GlobalSettings): Promise<void> {

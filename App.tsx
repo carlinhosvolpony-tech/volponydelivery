@@ -6,8 +6,8 @@ import CartSheet from './components/CartSheet';
 import AIChat from './components/AIChat';
 import AdminPanel from './components/AdminPanel';
 import Login from './components/Login';
-import { db, CATEGORIES } from './services/data'; 
-import { Restaurant, MenuItem, CartItem, AppView, GlobalSettings, User, Order } from './types';
+import { db, INITIAL_CATEGORIES } from './services/data'; 
+import { Restaurant, MenuItem, CartItem, AppView, GlobalSettings, User, Order, Category } from './types';
 import { ArrowLeft, CheckCircle, Clock, Plus, Zap, Store, Loader2, MessageCircle, Printer, Calendar, MapPin, Hash, Edit3 } from 'lucide-react';
 
 function App() {
@@ -114,24 +114,36 @@ function App() {
 
   const handleSendWhatsApp = () => {
     if (!lastOrderDetails || !activeRestaurant?.whatsappNumber) return;
-    const itemsText = lastOrderDetails.items.map(i => `• ${i.quantity}x ${i.name} (R$ ${(i.price * i.quantity).toFixed(2)})`).join('\n');
-    const message = `🎫 *NOVO PEDIDO - VOLPONY*
-------------------------------
-🏢 *Loja:* ${activeRestaurant.name}
-👤 *Cliente:* ${lastOrderDetails.customerName}
-------------------------------
-🛒 *PEDIDO:*
-${itemsText}
+    
+    // Calculamos os valores diretamente do lastOrderDetails para evitar subtotal 0
+    const orderSubtotal = lastOrderDetails.items.reduce((acc, i) => acc + (i.price * i.quantity), 0);
+    const orderDeliveryFee = lastOrderDetails.orderType === 'delivery' ? (activeRestaurant.deliveryFee || 0) : 0;
+    
+    // Formatação de itens estilo tabela
+    const itemsText = lastOrderDetails.items.map(i => 
+      `${i.quantity}x ${i.name}\n   R$ ${(i.price * i.quantity).toFixed(2)}`
+    ).join('\n');
 
-💰 *VALORES:*
-Subtotal: R$ ${subtotal.toFixed(2)}
-Taxa Entrega: R$ ${effectiveDeliveryFee.toFixed(2)}
-*TOTAL: R$ ${lastOrderDetails.total.toFixed(2)}*
-------------------------------
-📍 *TIPO:* ${lastOrderDetails.orderType === 'delivery' ? 'Entrega em domicílio' : 'Retirada no balcão'}
-💳 *PAGAMENTO:* ${lastOrderDetails.paymentMethod}
-------------------------------
-_Pedido gerado via Volpony Delivery_ 🍃`;
+    const message = `*VOLPONY DELIVERY* 🍃
+--------------------------------
+*COMPROVANTE DE PEDIDO*
+--------------------------------
+*LOJA:* ${activeRestaurant.name}
+*DATA:* ${new Date(lastOrderDetails.timestamp).toLocaleDateString()} ${new Date(lastOrderDetails.timestamp).toLocaleTimeString()}
+*PEDIDO:* #${lastOrderDetails.id}
+*CLIENTE:* ${lastOrderDetails.customerName}
+--------------------------------
+*ITENS:*
+${itemsText}
+--------------------------------
+*SUBTOTAL:* R$ ${orderSubtotal.toFixed(2)}
+*TAXA ENTREGA:* R$ ${orderDeliveryFee.toFixed(2)}
+*TOTAL:* R$ ${lastOrderDetails.total.toFixed(2)}
+--------------------------------
+*TIPO:* ${lastOrderDetails.orderType === 'delivery' ? '🛵 Entrega' : '🏪 Retirada'}
+*PAGAMENTO:* ${lastOrderDetails.paymentMethod}
+--------------------------------
+_Obrigado pela preferência!_`;
 
     const phone = activeRestaurant.whatsappNumber.replace(/\D/g, '');
     window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(message)}`, '_blank');
@@ -150,6 +162,8 @@ _Pedido gerado via Volpony Delivery_ 🍃`;
   };
 
   if (isLoading) return <div className="h-screen flex items-center justify-center bg-white"><Loader2 className="animate-spin text-brand-500" size={40} /></div>;
+
+  const currentCategories = settings?.categories || INITIAL_CATEGORIES;
 
   if (view === AppView.ADMIN_PANEL && settings) {
     return (
@@ -196,7 +210,7 @@ _Pedido gerado via Volpony Delivery_ 🍃`;
                <Zap className="absolute right-[-20px] bottom-[-20px] text-white opacity-10 w-48 h-48" />
             </div>
             <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
-              {CATEGORIES.map(cat => (
+              {currentCategories.map(cat => (
                 <button key={cat.id} onClick={() => setSelectedCategory(cat.id)} className={`flex flex-col items-center gap-2 min-w-[90px] p-4 rounded-2xl transition-all border ${selectedCategory === cat.id ? 'bg-brand-600 text-white shadow-lg scale-105' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
                   <span className="text-2xl">{cat.icon}</span>
                   <span className="text-xs font-bold">{cat.name}</span>
@@ -204,7 +218,7 @@ _Pedido gerado via Volpony Delivery_ 🍃`;
               ))}
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {restaurants.filter(r => selectedCategory === 'all' || r.category === selectedCategory).map(r => <RestaurantCard key={r.id} restaurant={r} onClick={handleRestaurantClick} />)}
+              {restaurants.filter(r => r.active !== false).filter(r => selectedCategory === 'all' || r.category === selectedCategory).map(r => <RestaurantCard key={r.id} restaurant={r} categories={currentCategories} onClick={handleRestaurantClick} />)}
             </div>
           </div>
         )}
@@ -230,21 +244,33 @@ _Pedido gerado via Volpony Delivery_ 🍃`;
                <div className="p-6">
                  <h1 className="text-3xl font-bold text-gray-800">{selectedRestaurant.name}</h1>
                  <p className="text-gray-500 flex items-center gap-1 mt-1"><Clock size={16}/> Entrega em {selectedRestaurant.deliveryTime}</p>
+                 {selectedRestaurant.active === false && <p className="mt-2 text-xs font-bold text-red-600 uppercase">Atenção: Este estabelecimento está desativado no momento.</p>}
                </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-               {selectedRestaurant.menu.map(item => (
+               {selectedRestaurant.menu.filter(item => item.active !== false).map(item => (
                  <div key={item.id} className="bg-white p-4 rounded-2xl border flex gap-4 hover:shadow-md transition-shadow">
                     <div className="flex-1 flex flex-col justify-between">
                        <div><h3 className="font-bold text-gray-800">{item.name}</h3><p className="text-xs text-gray-500 mt-1">{item.description}</p></div>
                        <div className="flex justify-between items-center mt-4">
                           <span className="font-bold text-brand-700 text-lg">R$ {item.price.toFixed(2)}</span>
-                          <button onClick={() => addToCart(item)} className="bg-brand-600 text-white p-2 rounded-xl shadow-sm"><Plus size={20}/></button>
+                          <button 
+                            disabled={selectedRestaurant.active === false}
+                            onClick={() => addToCart(item)} 
+                            className={`p-2 rounded-xl shadow-sm text-white ${selectedRestaurant.active === false ? 'bg-gray-300 cursor-not-allowed' : 'bg-brand-600'}`}
+                          >
+                            <Plus size={20}/>
+                          </button>
                        </div>
                     </div>
                     <img src={item.image} className="w-24 h-24 rounded-2xl object-cover bg-gray-100" />
                  </div>
                ))}
+               {selectedRestaurant.menu.filter(item => item.active !== false).length === 0 && (
+                 <div className="col-span-full py-20 text-center bg-white rounded-3xl border border-dashed text-gray-400">
+                    <p>Nenhum produto disponível no momento.</p>
+                 </div>
+               )}
             </div>
           </div>
         )}
@@ -285,7 +311,7 @@ _Pedido gerado via Volpony Delivery_ 🍃`;
                  <p className="text-gray-500 text-sm mt-1 px-10">Agora envie o cupom para o lojista via WhatsApp para validar seu pedido.</p>
               </div>
 
-              {/* CUPOM TÉRMICO */}
+              {/* CUPOM TÉRMICO VISUAL */}
               <div className="thermal-paper px-6 pt-8 pb-10 font-mono text-gray-900 border-x border-gray-100">
                  <div className="text-center space-y-1 mb-6">
                     <div className="flex justify-center mb-2"><Zap className="text-brand-600" size={24} fill="currentColor"/></div>
@@ -320,8 +346,8 @@ _Pedido gerado via Volpony Delivery_ 🍃`;
                  <div className="dot-divider"></div>
 
                  <div className="space-y-1 py-1">
-                    <div className="flex justify-between text-[11px]"><span>SUBTOTAL</span><span>R$ {subtotal.toFixed(2)}</span></div>
-                    <div className="flex justify-between text-[11px]"><span>TAXA ENTREGA ({lastOrderDetails.orderType === 'delivery' ? 'SIM' : 'NÃO'})</span><span>R$ {effectiveDeliveryFee.toFixed(2)}</span></div>
+                    <div className="flex justify-between text-[11px]"><span>SUBTOTAL</span><span>R$ {lastOrderDetails.items.reduce((acc, i) => acc + (i.price * i.quantity), 0).toFixed(2)}</span></div>
+                    <div className="flex justify-between text-[11px]"><span>TAXA ENTREGA ({lastOrderDetails.orderType === 'delivery' ? 'SIM' : 'NÃO'})</span><span>R$ {(lastOrderDetails.orderType === 'delivery' ? activeRestaurant?.deliveryFee : 0)?.toFixed(2)}</span></div>
                     <div className="flex justify-between text-base font-bold pt-2 border-t border-black mt-2">
                        <span>TOTAL</span>
                        <span>R$ {lastOrderDetails.total.toFixed(2)}</span>

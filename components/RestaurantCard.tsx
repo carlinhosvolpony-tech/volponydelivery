@@ -1,13 +1,15 @@
+
 import React from 'react';
 import { Star, Clock, MapPin, XCircle, Car, Bike } from 'lucide-react';
-import { Restaurant } from '../types';
+import { Restaurant, Category } from '../types';
 
 interface RestaurantCardProps {
   restaurant: Restaurant;
+  categories: Category[];
   onClick: (restaurant: Restaurant) => void;
 }
 
-const RestaurantCard: React.FC<RestaurantCardProps> = ({ restaurant, onClick }) => {
+const RestaurantCard: React.FC<RestaurantCardProps> = ({ restaurant, categories, onClick }) => {
   // Logic to determine if open (supports 2 shifts)
   const now = new Date();
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
@@ -34,6 +36,7 @@ const RestaurantCard: React.FC<RestaurantCardProps> = ({ restaurant, onClick }) 
   
   const isOpen = isOpenShift1 || isOpenShift2;
   const isTaxi = restaurant.category === 'taxi';
+  const categoryName = categories.find(c => c.id === restaurant.category)?.name || restaurant.category;
 
   return (
     <div 
@@ -70,7 +73,7 @@ const RestaurantCard: React.FC<RestaurantCardProps> = ({ restaurant, onClick }) 
         
         <p className="text-sm text-gray-500 mb-2 capitalize flex items-center gap-1">
            {isTaxi ? <Car size={14}/> : null}
-           {isTaxi && restaurant.vehicleModel ? `${restaurant.vehicleModel}` : restaurant.category}
+           {isTaxi && restaurant.vehicleModel ? `${restaurant.vehicleModel}` : categoryName}
         </p>
         
         <div className="flex justify-between items-end mt-auto text-xs text-gray-500">

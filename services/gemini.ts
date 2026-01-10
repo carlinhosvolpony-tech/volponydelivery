@@ -1,39 +1,9 @@
+
 import { GoogleGenAI } from "@google/genai";
 import { Restaurant } from "../types";
 
-// Lazy initialization to prevent crash on load if API key is missing
-let ai: GoogleGenAI | null = null;
-
-const getAiInstance = () => {
-  if (!ai) {
-    let apiKey = '';
-    
-    // Tenta obter a chave seguindo o padrão Vite (Vercel/Local)
-    // @ts-ignore
-    if (typeof import.meta !== 'undefined' && import.meta.env) {
-        // @ts-ignore
-        apiKey = import.meta.env.VITE_API_KEY || '';
-    }
-    
-    // Fallback para ambientes Node.js ou configurações antigas
-    if (!apiKey && typeof process !== 'undefined' && process.env) {
-        apiKey = process.env.VITE_API_KEY || process.env.API_KEY || '';
-    }
-
-    // Check if key exists and is not the placeholder text or empty
-    if (!apiKey || apiKey === 'undefined' || apiKey === '' || apiKey.includes('Sua_API_Key')) {
-      console.warn("Volpony: Gemini API Key is missing (VITE_API_KEY). AI features disabled.");
-      return null;
-    }
-    try {
-      ai = new GoogleGenAI({ apiKey });
-    } catch (e) {
-      console.error("Failed to initialize Gemini Client:", e);
-      return null;
-    }
-  }
-  return ai;
-};
+// Always initialize with named parameters and process.env.API_KEY.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const generateSystemInstruction = (restaurants: Restaurant[]) => `
 Você é o "Volpony Bot", um assistente virtual inteligente e saudável do aplicativo de delivery "Volpony Delivery".
@@ -56,20 +26,16 @@ REGRAS:
 `;
 
 export const sendMessageToGemini = async (
-  history: { role: string; parts: { text: string }[] }[],
+  history: { role: 'user' | 'model'; parts: { text: string }[] }[],
   userMessage: string,
   currentRestaurants: Restaurant[]
 ): Promise<string> => {
   try {
-    const aiInstance = getAiInstance();
+    // Basic Text Tasks: 'gemini-3-flash-preview'
+    const model = 'gemini-3-flash-preview';
     
-    if (!aiInstance) {
-      return "Desculpe, o serviço de IA não está configurado corretamente no momento. (Chave de API ausente)";
-    }
-
-    const model = 'gemini-2.5-flash';
-    
-    const chat = aiInstance.chats.create({
+    // Initializing chat with history and system instruction
+    const chat = ai.chats.create({
       model: model,
       config: {
         systemInstruction: generateSystemInstruction(currentRestaurants),
@@ -82,6 +48,7 @@ export const sendMessageToGemini = async (
       message: userMessage
     });
 
+    // Accessing text as a property from the response object
     return result.text || "Desculpe, tive um problema ao processar seu pedido. Tente novamente!";
   } catch (error) {
     console.error("Gemini API Error:", error);

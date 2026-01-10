@@ -1,4 +1,10 @@
 
+export interface Category {
+  id: string;
+  name: string;
+  icon: string;
+}
+
 export interface MenuItem {
   id: string;
   name: string;
@@ -6,6 +12,7 @@ export interface MenuItem {
   price: number;
   image: string;
   popular?: boolean;
+  active?: boolean; // Propriedade para controle de estoque/disponibilidade
 }
 
 export interface Restaurant {
@@ -39,6 +46,7 @@ export interface Restaurant {
   // Pagamento e Contato
   pixKey?: string;
   whatsappNumber?: string;
+  active?: boolean; // Permite ao admin desativar o estabelecimento completamente
 }
 
 export interface CartItem extends MenuItem {
@@ -58,6 +66,7 @@ export interface GlobalSettings {
   appFee: number;
   minOrderValue: number;
   feeType: 'fixed' | 'percentage';
+  categories?: Category[];
 }
 
 export interface User {

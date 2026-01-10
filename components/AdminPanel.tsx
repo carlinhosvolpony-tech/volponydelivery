@@ -1,8 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { Restaurant, MenuItem, GlobalSettings, User } from '../types';
-import { CATEGORIES } from '../services/data'; 
-import { Plus, Trash2, Edit2, Save, X, Store, Smartphone, Users, Tag, DollarSign, Clock, Shield, User as UserIcon, Lock, Check } from 'lucide-react';
+import { Restaurant, MenuItem, GlobalSettings, User, Category } from '../types';
+import { Plus, Trash2, Edit2, Save, X, Store, Smartphone, Users, Tag, DollarSign, Clock, Shield, User as UserIcon, Lock, Check, Layers, Eye, EyeOff } from 'lucide-react';
 
 interface AdminPanelProps {
   restaurants: Restaurant[];
@@ -21,17 +20,19 @@ interface AdminPanelProps {
 const AdminPanel: React.FC<AdminPanelProps> = ({ 
   restaurants, settings, users, currentUser, initialEditId, onSaveRestaurant, onDeleteRestaurant, onSaveSettings, onSaveUser, onDeleteUser, onClose 
 }) => {
-  const [activeTab, setActiveTab] = useState<'restaurants' | 'users'>('restaurants');
+  const [activeTab, setActiveTab] = useState<'restaurants' | 'users' | 'categories'>('restaurants');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [newCategory, setNewCategory] = useState({ name: '', icon: '' });
   
   const isAdmin = currentUser?.role === 'admin';
   const isManager = currentUser?.role === 'manager';
 
-  // Lojistas só vêem sua própria loja. Admin vê todas.
   const visibleRestaurants = isManager 
     ? restaurants.filter(r => r.id === currentUser?.restaurantId) 
     : restaurants;
+
+  const currentCategories = settings.categories || [];
 
   const [formData, setFormData] = useState<Restaurant>({} as Restaurant);
   const [userFormData, setUserFormData] = useState<User>({} as User);
@@ -45,6 +46,27 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
       }
     }
   }, [initialEditId, restaurants]);
+
+  // --- Handlers para Categorias ---
+  const handleAddCategory = () => {
+    if (!newCategory.name || !newCategory.icon) return alert("Preencha nome e ícone.");
+    const id = newCategory.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-');
+    if (currentCategories.find(c => c.id === id)) return alert("Categoria já existe.");
+    
+    const updatedCategories = [...currentCategories, { id, ...newCategory }];
+    onSaveSettings({ ...settings, categories: updatedCategories });
+    setNewCategory({ name: '', icon: '' });
+  };
+
+  const handleDeleteCategory = (id: string) => {
+    if (id === 'all') return alert("A categoria 'Tudo' não pode ser removida.");
+    if (restaurants.some(r => r.category === id)) return alert("Não é possível remover: existem lojas vinculadas a esta categoria.");
+    
+    if (window.confirm("Deseja remover esta categoria?")) {
+      const updatedCategories = currentCategories.filter(c => c.id !== id);
+      onSaveSettings({ ...settings, categories: updatedCategories });
+    }
+  };
 
   // --- Handlers para Usuários ---
   const handleEditUser = (user: User) => {
@@ -90,10 +112,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
       deliveryFee: 2.00,
       openingTime: '08:00',
       closingTime: '22:00',
-      category: 'snacks',
+      category: currentCategories[1]?.id || 'snacks',
       image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80',
       menu: [],
-      acceptedPaymentMethods: ['Dinheiro', 'PIX', 'Cartão Débito', 'Cartão Crédito']
+      acceptedPaymentMethods: ['Dinheiro', 'PIX', 'Cartão Débito', 'Cartão Crédito'],
+      active: true
     });
     window.scrollTo(0, 0);
   };
@@ -105,6 +128,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
+  const handleToggleActive = (e: React.MouseEvent, restaurant: Restaurant) => {
+    e.stopPropagation();
+    if (!isAdmin) return;
+    const updated = { ...restaurant, active: restaurant.active === false };
+    onSaveRestaurant(updated);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.category) return alert("Nome e categoria são obrigatórios.");
@@ -112,7 +142,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     setEditingId(null);
   };
 
-  // View de Edição de Usuário (Modal-like)
   if (editingUserId) {
     return (
       <div className="min-h-screen bg-gray-50 p-4 md:p-8 flex items-center justify-center">
@@ -180,7 +209,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     );
   }
 
-  // View de Edição de Loja
   if (editingId) {
     return (
       <div className="min-h-screen bg-gray-50 p-4 md:p-8">
@@ -206,13 +234,26 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                     <div>
                       <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Ramo Comercial</label>
                       <select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className="w-full border rounded-xl p-2.5 bg-white outline-none">
-                        {CATEGORIES.filter(c => c.id !== 'all').map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
+                        {currentCategories.filter(c => c.id !== 'all').map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
                       </select>
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">URL da Imagem de Capa</label>
                       <input value={formData.image} onChange={e => setFormData({...formData, image: e.target.value})} className="w-full border rounded-xl p-2.5 outline-none bg-white" placeholder="http://..." />
                     </div>
+                    {isAdmin && (
+                      <div className="pt-2 border-t">
+                         <label className="flex items-center gap-2 cursor-pointer">
+                           <input 
+                             type="checkbox" 
+                             checked={formData.active !== false} 
+                             onChange={e => setFormData({...formData, active: e.target.checked})}
+                             className="w-4 h-4 text-brand-600 rounded border-gray-300 focus:ring-brand-500" 
+                           />
+                           <span className="text-xs font-bold text-gray-700 uppercase">Estabelecimento Ativo</span>
+                         </label>
+                      </div>
+                    )}
                  </div>
 
                  <div className="bg-blue-50 p-5 rounded-3xl border border-blue-100 space-y-4">
@@ -282,18 +323,32 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                   </div>
                   <div className="bg-gray-50 rounded-3xl p-4 border border-gray-100 space-y-3 max-h-[500px] overflow-y-auto shadow-inner">
                      {formData.menu.map((item, idx) => (
-                       <div key={idx} className="p-3 bg-white border border-gray-100 rounded-2xl flex gap-3 shadow-sm items-center relative group hover:border-brand-200 transition-colors">
+                       <div key={idx} className={`p-3 border border-gray-100 rounded-2xl flex gap-3 shadow-sm items-center relative group hover:border-brand-200 transition-all ${item.active === false ? 'bg-gray-200/50 grayscale' : 'bg-white'}`}>
                           <img src={item.image} className="w-10 h-10 rounded-xl object-cover border" />
                           <div className="flex-1">
-                             <input placeholder="Nome do Item" value={item.name} onChange={e => { const m = [...formData.menu]; m[idx].name = e.target.value; setFormData({...formData, menu: m}) }} className="w-full text-xs font-bold border-none outline-none focus:text-brand-600 bg-transparent" />
+                             <div className="flex items-center gap-2">
+                               <input placeholder="Nome do Item" value={item.name} onChange={e => { const m = [...formData.menu]; m[idx].name = e.target.value; setFormData({...formData, menu: m}) }} className="w-full text-xs font-bold border-none outline-none focus:text-brand-600 bg-transparent" />
+                               {item.active === false && <span className="text-[8px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-bold uppercase">Inativo</span>}
+                             </div>
                              <div className="flex items-center text-[10px] text-brand-600 font-bold mt-1">
                                 R$ <input type="number" step="0.01" value={item.price} onChange={e => { const m = [...formData.menu]; m[idx].price = parseFloat(e.target.value); setFormData({...formData, menu: m}) }} className="w-16 ml-1 bg-transparent outline-none border-b border-transparent focus:border-brand-300" />
                              </div>
                           </div>
-                          <button type="button" onClick={() => setFormData({...formData, menu: formData.menu.filter((_, i) => i !== idx)})} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={16}/></button>
+                          
+                          <div className="flex items-center gap-1">
+                            <button 
+                              type="button" 
+                              title={item.active === false ? "Ativar Produto" : "Desativar Produto"}
+                              onClick={() => { const m = [...formData.menu]; m[idx].active = item.active === false; setFormData({...formData, menu: m}) }} 
+                              className={`p-1.5 rounded-lg transition-colors ${item.active === false ? 'text-gray-400 hover:text-green-600 hover:bg-green-50' : 'text-green-600 hover:text-gray-400 hover:bg-gray-100'}`}
+                            >
+                              {item.active === false ? <EyeOff size={16}/> : <Eye size={16}/>}
+                            </button>
+                            <button type="button" onClick={() => setFormData({...formData, menu: formData.menu.filter((_, i) => i !== idx)})} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={16}/></button>
+                          </div>
                        </div>
                      ))}
-                     <button type="button" onClick={() => setFormData({...formData, menu: [...formData.menu, { id: Date.now().toString(), name: 'Novo Produto', description: '', price: 0, image: 'https://images.unsplash.com/photo-1546272927-d043224c4999?auto=format&fit=crop&w=200&q=80' }]})} className="w-full py-4 border-2 border-dashed border-gray-200 rounded-2xl text-gray-400 text-xs font-bold hover:bg-white hover:border-brand-300 hover:text-brand-600 transition-all flex items-center justify-center gap-2">
+                     <button type="button" onClick={() => setFormData({...formData, menu: [...formData.menu, { id: Date.now().toString(), name: 'Novo Produto', description: '', price: 0, image: 'https://images.unsplash.com/photo-1546272927-d043224c4999?auto=format&fit=crop&w=200&q=80', active: true }]})} className="w-full py-4 border-2 border-dashed border-gray-200 rounded-2xl text-gray-400 text-xs font-bold hover:bg-white hover:border-brand-300 hover:text-brand-600 transition-all flex items-center justify-center gap-2">
                        <Plus size={16} /> Adicionar Item ao Cardápio
                      </button>
                   </div>
@@ -312,7 +367,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     );
   }
 
-  // View Principal do Admin
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="max-w-5xl mx-auto space-y-8 pb-20">
@@ -331,9 +385,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
             <Store size={18} /> Lojas & Serviços
           </button>
           {isAdmin && (
-            <button onClick={() => setActiveTab('users')} className={`px-8 py-3 rounded-xl font-bold transition-all flex items-center gap-2 text-sm ${activeTab === 'users' ? 'bg-white text-brand-600 shadow-sm border border-gray-100' : 'text-gray-500 hover:text-gray-700'}`}>
-              <Users size={18} /> Colaboradores / Lojistas
-            </button>
+            <>
+              <button onClick={() => setActiveTab('users')} className={`px-8 py-3 rounded-xl font-bold transition-all flex items-center gap-2 text-sm ${activeTab === 'users' ? 'bg-white text-brand-600 shadow-sm border border-gray-100' : 'text-gray-500 hover:text-gray-700'}`}>
+                <Users size={18} /> Usuários
+              </button>
+              <button onClick={() => setActiveTab('categories')} className={`px-8 py-3 rounded-xl font-bold transition-all flex items-center gap-2 text-sm ${activeTab === 'categories' ? 'bg-white text-brand-600 shadow-sm border border-gray-100' : 'text-gray-500 hover:text-gray-700'}`}>
+                <Layers size={18} /> Categorias
+              </button>
+            </>
           )}
         </div>
 
@@ -355,6 +414,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                     <tr>
                       <th className="px-6 py-4">Estabelecimento</th>
                       <th className="px-6 py-4">Ramo</th>
+                      <th className="px-6 py-4">Status</th>
                       <th className="px-6 py-4">Contato / WhatsApp</th>
                       <th className="px-6 py-4 text-right">Ações</th>
                     </tr>
@@ -364,7 +424,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                       <tr 
                         key={r.id} 
                         onClick={() => handleEdit(r)}
-                        className="hover:bg-brand-50/50 transition-colors cursor-pointer group"
+                        className={`hover:bg-brand-50/50 transition-colors cursor-pointer group ${r.active === false ? 'bg-gray-50 grayscale opacity-60' : ''}`}
                       >
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-4">
@@ -374,14 +434,28 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                         </td>
                         <td className="px-6 py-4">
                           <span className="bg-white border text-gray-600 px-3 py-1 rounded-full text-[10px] font-bold uppercase border-gray-200">
-                            {CATEGORIES.find(c => c.id === r.category)?.name}
+                            {currentCategories.find(c => c.id === r.category)?.name || r.category}
                           </span>
+                        </td>
+                        <td className="px-6 py-4">
+                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${r.active !== false ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                              {r.active !== false ? 'Ativo' : 'Desativado'}
+                           </span>
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-500 font-medium">
                           {r.whatsappNumber || 'Não informado'}
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex justify-end gap-2">
+                            {isAdmin && (
+                              <button 
+                                onClick={(e) => handleToggleActive(e, r)} 
+                                className={`p-2 rounded-xl transition-colors border ${r.active === false ? 'text-green-600 bg-green-50 border-green-100 hover:bg-green-100' : 'text-gray-400 bg-gray-50 border-gray-100 hover:text-red-500 hover:bg-red-50'}`}
+                                title={r.active === false ? "Ativar Estabelecimento" : "Desativar Estabelecimento"}
+                              >
+                                {r.active === false ? <Eye size={18}/> : <EyeOff size={18}/>}
+                              </button>
+                            )}
                             <div className="p-2 text-brand-600 bg-brand-50 rounded-xl group-hover:bg-brand-100 transition-colors border border-brand-100">
                               <Edit2 size={18}/>
                             </div>
@@ -450,11 +524,50 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                  </table>
                </div>
             </div>
-            <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl flex items-start gap-3">
-               <Shield className="text-amber-600 flex-shrink-0" size={20} />
-               <p className="text-xs text-amber-800 leading-relaxed">
-                 <b>Dica de Segurança:</b> Ao criar uma conta para um lojista (Cargo: Manager), certifique-se de vincular a loja correta. O lojista poderá editar cardápio, horários e informações da loja, mas <u>não terá permissão</u> para alterar a Taxa de Entrega.
-               </p>
+          </div>
+        )}
+
+        {activeTab === 'categories' && isAdmin && (
+          <div className="animate-fadeIn space-y-6">
+            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
+              <h2 className="font-bold text-gray-800 flex items-center gap-2 uppercase text-xs tracking-widest mb-6"><Layers size={16} className="text-brand-500"/> Criar Nova Categoria</h2>
+              <div className="flex flex-wrap gap-4 items-end">
+                <div className="flex-1 min-w-[200px]">
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Nome da Categoria</label>
+                  <input value={newCategory.name} onChange={e => setNewCategory({...newCategory, name: e.target.value})} className="w-full border rounded-xl p-3 outline-none focus:ring-2 focus:ring-brand-500 bg-gray-50" placeholder="Ex: Farmácia" />
+                </div>
+                <div className="w-32">
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Emoji / Ícone</label>
+                  <input value={newCategory.icon} onChange={e => setNewCategory({...newCategory, icon: e.target.value})} className="w-full border rounded-xl p-3 outline-none text-center text-xl bg-gray-50" placeholder="💊" />
+                </div>
+                <button onClick={handleAddCategory} className="bg-brand-600 text-white px-6 py-3.5 rounded-xl font-bold text-sm hover:bg-brand-700 transition-all shadow-lg flex items-center gap-2">
+                  <Plus size={18} /> Adicionar
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+               <div className="p-6 border-b bg-gray-50/50">
+                  <h2 className="font-bold text-gray-800 uppercase text-xs tracking-widest">Categorias Existentes</h2>
+               </div>
+               <div className="p-6">
+                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                    {currentCategories.map(cat => (
+                      <div key={cat.id} className="relative group p-4 border rounded-2xl text-center bg-gray-50 hover:border-brand-300 transition-all">
+                        <span className="text-3xl block mb-2">{cat.icon}</span>
+                        <span className="text-xs font-bold text-gray-700 block">{cat.name}</span>
+                        {cat.id !== 'all' && (
+                          <button 
+                            onClick={() => handleDeleteCategory(cat.id)}
+                            className="absolute -top-2 -right-2 p-1.5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                          >
+                            <Trash2 size={12}/>
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                 </div>
+               </div>
             </div>
           </div>
         )}
