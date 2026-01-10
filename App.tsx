@@ -10,8 +10,8 @@ import RestaurantDashboard from './components/RestaurantDashboard';
 import CourierDashboard from './components/CourierDashboard';
 import CustomerDashboard from './components/CustomerDashboard';
 import { db, INITIAL_CATEGORIES } from './services/data'; 
-import { Restaurant, MenuItem, CartItem, AppView, GlobalSettings, User, Order, Category, OrderStatus } from './types';
-import { ArrowLeft, CheckCircle, Clock, Plus, Zap, Store, Loader2, MessageCircle, Printer, Calendar, MapPin, Hash, Edit3 } from 'lucide-react';
+import { Restaurant, MenuItem, CartItem, AppView, GlobalSettings, User, Order, Category, OrderStatus, Address } from './types';
+import { ArrowLeft, CheckCircle, Clock, Plus, Zap, Store, Loader2, MessageCircle, Printer, Calendar, MapPin, Hash, Edit3, Home, Briefcase, ChevronRight } from 'lucide-react';
 
 function App() {
   const [view, setView] = useState<AppView>(AppView.HOME);
@@ -30,6 +30,7 @@ function App() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   
   const [orderType, setOrderType] = useState<'delivery' | 'pickup'>('delivery');
+  const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<string>('');
   const [lastOrderDetails, setLastOrderDetails] = useState<Order | null>(null);
 
@@ -46,7 +47,6 @@ function App() {
       setUsers(u);
       setOrders(o);
 
-      // Auto-redirect lojistas e entregadores
       const savedUserStr = localStorage.getItem('volpony_session');
       if (savedUserStr) {
         const uObj = JSON.parse(savedUserStr);
@@ -66,7 +66,11 @@ function App() {
       await loadData();
       setIsLoading(false);
       const savedUserStr = localStorage.getItem('volpony_session');
-      if (savedUserStr) setCurrentUser(JSON.parse(savedUserStr));
+      if (savedUserStr) {
+        const u = JSON.parse(savedUserStr);
+        setCurrentUser(u);
+        if (u.addresses?.length > 0) setSelectedAddress(u.addresses[0]);
+      }
     };
     init();
     const sub = db.subscribeToChanges(() => loadData());
@@ -99,14 +103,19 @@ function App() {
   };
 
   const confirmOrder = async () => {
+    if (orderType === 'delivery' && !selectedAddress) return alert("Selecione um endereço de entrega.");
     if (!paymentMethod) return alert("Selecione uma forma de pagamento.");
     if (!activeRestaurant) return;
     
+    const formattedAddress = orderType === 'pickup' 
+      ? 'Retirada na Loja' 
+      : `${selectedAddress?.street}, ${selectedAddress?.number}${selectedAddress?.complement ? ` - ${selectedAddress.complement}` : ''}, ${selectedAddress?.neighborhood}`;
+
     const newOrder: Order = {
       id: Math.random().toString(36).substr(2, 9).toUpperCase(),
       customerId: currentUser?.id,
       customerName: currentUser?.name || 'Cliente',
-      customerAddress: 'Endereço a confirmar no WhatsApp',
+      customerAddress: formattedAddress,
       items: [...cart],
       total: total,
       status: 'pending',
@@ -140,7 +149,7 @@ function App() {
     const orderDeliveryFee = lastOrderDetails.orderType === 'delivery' ? (activeRestaurant.deliveryFee || 0) : 0;
     const itemsText = lastOrderDetails.items.map(i => `${i.quantity}x ${i.name}\n   R$ ${(i.price * i.quantity).toFixed(2)}`).join('\n');
 
-    const message = `*VOLPONY DELIVERY* 🍃\n--------------------------------\n*COMPROVANTE DE PEDIDO*\n--------------------------------\n*LOJA:* ${activeRestaurant.name}\n*DATA:* ${new Date(lastOrderDetails.timestamp).toLocaleDateString()} ${new Date(lastOrderDetails.timestamp).toLocaleTimeString()}\n*PEDIDO:* #${lastOrderDetails.id}\n*CLIENTE:* ${lastOrderDetails.customerName}\n--------------------------------\n*ITENS:*\n${itemsText}\n--------------------------------\n*SUBTOTAL:* R$ ${orderSubtotal.toFixed(2)}\n*TAXA ENTREGA:* R$ ${orderDeliveryFee.toFixed(2)}\n*TOTAL:* R$ ${lastOrderDetails.total.toFixed(2)}\n--------------------------------\n*TIPO:* ${lastOrderDetails.orderType === 'delivery' ? '🛵 Entrega' : '🏪 Retirada'}\n*PAGAMENTO:* ${lastOrderDetails.paymentMethod}\n--------------------------------\n_Obrigado pela preferência!_`;
+    const message = `*VOLPONY DELIVERY* 🍃\n--------------------------------\n*COMPROVANTE DE PEDIDO*\n--------------------------------\n*LOJA:* ${activeRestaurant.name}\n*DATA:* ${new Date(lastOrderDetails.timestamp).toLocaleDateString()} ${new Date(lastOrderDetails.timestamp).toLocaleTimeString()}\n*PEDIDO:* #${lastOrderDetails.id}\n*CLIENTE:* ${lastOrderDetails.customerName}\n*ENDEREÇO:* ${lastOrderDetails.customerAddress}\n--------------------------------\n*ITENS:*\n${itemsText}\n--------------------------------\n*SUBTOTAL:* R$ ${orderSubtotal.toFixed(2)}\n*TAXA ENTREGA:* R$ ${orderDeliveryFee.toFixed(2)}\n*TOTAL:* R$ ${lastOrderDetails.total.toFixed(2)}\n--------------------------------\n*TIPO:* ${lastOrderDetails.orderType === 'delivery' ? '🛵 Entrega' : '🏪 Retirada'}\n*PAGAMENTO:* ${lastOrderDetails.paymentMethod}\n--------------------------------\n_Obrigado pela preferência!_`;
 
     const phone = activeRestaurant.whatsappNumber.replace(/\D/g, '');
     window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(message)}`, '_blank');
@@ -150,7 +159,6 @@ function App() {
 
   const currentCategories = settings?.categories || INITIAL_CATEGORIES;
 
-  // Renderização de Dashboards
   if (view === AppView.ADMIN_PANEL && settings) {
     return <AdminPanel restaurants={restaurants} settings={settings} users={users} currentUser={currentUser} initialEditId={initialEditId} onSaveRestaurant={async (r) => { const newR = restaurants.some(x => x.id === r.id) ? restaurants.map(x => x.id === r.id ? r : x) : [...restaurants, r]; setRestaurants(newR); await db.saveRestaurants(newR); }} onDeleteRestaurant={async (id) => { const newR = restaurants.filter(x => x.id !== id); setRestaurants(newR); await db.saveRestaurants(newR); }} onSaveSettings={async (s) => { setSettings(s); await db.saveSettings(s); }} onSaveUser={async (u) => { const newU = users.some(x => x.id === u.id) ? users.map(x => x.id === u.id ? u : x) : [...users, u]; setUsers(newU); await db.saveUsers(newU); }} onDeleteUser={async (id) => { const newU = users.filter(x => x.id !== id); setUsers(newU); await db.saveUsers(newU); }} onClose={() => { setView(AppView.HOME); setInitialEditId(null); }} />;
   }
@@ -228,11 +236,52 @@ function App() {
         {view === AppView.CHECKOUT && (
            <div className="max-w-xl mx-auto space-y-6 animate-fadeIn">
               <h2 className="text-2xl font-bold text-gray-800">Finalizar Compra</h2>
+              
               <div className="bg-white p-6 rounded-3xl border shadow-sm space-y-6">
+                 {/* Tipo de Pedido */}
                  <div className="flex bg-gray-100 p-1.5 rounded-2xl">
                     <button className={`flex-1 py-3 rounded-xl font-bold transition-all ${orderType === 'delivery' ? 'bg-white text-brand-600 shadow-sm' : 'text-gray-500'}`} onClick={() => setOrderType('delivery')}>Entrega (R$ {activeRestaurant?.deliveryFee.toFixed(2)})</button>
                     <button className={`flex-1 py-3 rounded-xl font-bold transition-all ${orderType === 'pickup' ? 'bg-white text-brand-600 shadow-sm' : 'text-gray-500'}`} onClick={() => setOrderType('pickup')}>Retirada</button>
                  </div>
+
+                 {/* Seleção de Endereço (Só aparece se for entrega) */}
+                 {orderType === 'delivery' && (
+                   <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <h3 className="font-bold text-gray-700">Endereço de Entrega</h3>
+                        <button onClick={() => setView(AppView.CUSTOMER_DASHBOARD)} className="text-brand-600 text-xs font-bold">+ Gerenciar</button>
+                      </div>
+                      
+                      {(!currentUser?.addresses || currentUser.addresses.length === 0) ? (
+                        <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl flex flex-col items-center gap-2">
+                           <MapPin className="text-amber-500" size={24}/>
+                           <p className="text-xs text-amber-800 text-center font-medium">Você precisa cadastrar um endereço no seu perfil para receber em casa.</p>
+                           <button onClick={() => setView(AppView.CUSTOMER_DASHBOARD)} className="bg-amber-500 text-white px-4 py-2 rounded-xl text-xs font-bold">Ir para Meus Endereços</button>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                           {currentUser.addresses.map(addr => (
+                             <button 
+                               key={addr.id}
+                               onClick={() => setSelectedAddress(addr)}
+                               className={`w-full p-4 rounded-2xl border flex items-center gap-3 transition-all ${selectedAddress?.id === addr.id ? 'border-brand-500 bg-brand-50' : 'border-gray-100 hover:bg-gray-50'}`}
+                             >
+                               <div className={`${selectedAddress?.id === addr.id ? 'text-brand-600' : 'text-gray-400'}`}>
+                                 {addr.label.toLowerCase() === 'casa' ? <Home size={20}/> : <Briefcase size={20}/>}
+                               </div>
+                               <div className="text-left flex-1">
+                                  <p className="text-sm font-bold text-gray-800">{addr.label}</p>
+                                  <p className="text-xs text-gray-500">{addr.street}, {addr.number}</p>
+                               </div>
+                               {selectedAddress?.id === addr.id && <CheckCircle className="text-brand-600" size={18}/>}
+                             </button>
+                           ))}
+                        </div>
+                      )}
+                   </div>
+                 )}
+
+                 {/* Forma de Pagamento */}
                  <div className="space-y-3">
                     <h3 className="font-bold text-gray-700">Pagamento no Recebimento</h3>
                     <div className="grid grid-cols-2 gap-3">
@@ -241,12 +290,21 @@ function App() {
                        ))}
                     </div>
                  </div>
+
+                 {/* Resumo de Valores */}
                  <div className="border-t pt-4 space-y-2">
                     <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>R$ {subtotal.toFixed(2)}</span></div>
                     <div className="flex justify-between text-gray-600"><span>Taxa de Entrega</span><span>R$ {effectiveDeliveryFee.toFixed(2)}</span></div>
                     <div className="flex justify-between font-bold text-xl text-gray-800 pt-3 border-t"><span>Total</span><span className="text-brand-600">R$ {total.toFixed(2)}</span></div>
                  </div>
-                 <button onClick={confirmOrder} className="w-full bg-brand-600 text-white py-4 rounded-2xl font-bold text-lg hover:bg-brand-700 shadow-lg shadow-brand-500/20">Confirmar Pedido</button>
+
+                 <button 
+                    onClick={confirmOrder} 
+                    disabled={orderType === 'delivery' && !selectedAddress}
+                    className={`w-full py-4 rounded-2xl font-bold text-lg shadow-lg shadow-brand-500/20 transition-all ${orderType === 'delivery' && !selectedAddress ? 'bg-gray-300 cursor-not-allowed' : 'bg-brand-600 text-white hover:bg-brand-700'}`}
+                 >
+                   Confirmar Pedido
+                 </button>
               </div>
            </div>
         )}
@@ -270,6 +328,10 @@ function App() {
                     <div className="flex justify-between"><span>DATA:</span><span>{new Date(lastOrderDetails.timestamp).toLocaleString()}</span></div>
                     <div className="flex justify-between"><span>PEDIDO:</span><span className="font-bold">#{lastOrderDetails.id}</span></div>
                     <div className="flex justify-between"><span>CLIENTE:</span><span className="font-bold">{lastOrderDetails.customerName}</span></div>
+                    <div className="flex flex-col border-t border-gray-100 pt-1 mt-1">
+                      <span className="uppercase text-[8px] font-bold opacity-60">Endereço:</span>
+                      <span className="font-bold text-[9px] leading-tight">{typeof lastOrderDetails.customerAddress === 'string' ? lastOrderDetails.customerAddress : `${lastOrderDetails.customerAddress.street}, ${lastOrderDetails.customerAddress.number}`}</span>
+                    </div>
                  </div>
                  <div className="dot-divider"></div>
                  <div className="space-y-3 py-2 text-[11px]">

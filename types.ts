@@ -5,6 +5,17 @@ export interface Category {
   icon: string;
 }
 
+export interface Address {
+  id: string;
+  label: string; // Ex: Casa, Trabalho
+  street: string;
+  number: string;
+  neighborhood: string;
+  city: string;
+  complement?: string;
+  isDefault?: boolean;
+}
+
 export interface MenuItem {
   id: string;
   name: string;
@@ -12,7 +23,7 @@ export interface MenuItem {
   price: number;
   image: string;
   popular?: boolean;
-  active?: boolean; // Propriedade para controle de estoque/disponibilidade
+  active?: boolean;
 }
 
 export interface Restaurant {
@@ -20,33 +31,24 @@ export interface Restaurant {
   name: string;
   rating: number;
   deliveryTime: string; 
-  deliveryFee: number; // Taxa fixa ou base
+  deliveryFee: number;
   pricePerKm?: number;  
   minOrderValue?: number;
   acceptedPaymentMethods?: string[];
-  
-  // Configuração de Taxa do App (Comissão interna)
   appFeeRate?: number;
   appFeeType?: 'percentage' | 'fixed'; 
-  
-  // Campos Específicos para Taxi/Moto
   vehicleModel?: string;
   vehiclePlate?: string;
-  
-  // Horários
   openingTime: string;
   closingTime: string;
   openingTime2?: string;
   closingTime2?: string;
-  
-  category: string; // Ramo comercial
+  category: string;
   image: string;
   menu: MenuItem[]; 
-  
-  // Pagamento e Contato
   pixKey?: string;
   whatsappNumber?: string;
-  active?: boolean; // Permite ao admin desativar o estabelecimento completamente
+  active?: boolean;
 }
 
 export interface CartItem extends MenuItem {
@@ -77,6 +79,7 @@ export interface User {
   role: 'admin' | 'manager' | 'courier' | 'customer';
   restaurantId?: string; 
   courierRestaurantIds?: string[]; 
+  addresses?: Address[]; // Lista de endereços do cliente
 }
 
 export type OrderStatus = 'pending' | 'preparing' | 'ready' | 'heading_to_pickup' | 'delivering' | 'completed' | 'cancelled';
@@ -85,7 +88,7 @@ export interface Order {
   id: string;
   customerId?: string;
   customerName: string;
-  customerAddress: string;
+  customerAddress: string | Address; // Pode ser o texto simples ou o objeto detalhado
   items: CartItem[];
   total: number;
   status: OrderStatus;
