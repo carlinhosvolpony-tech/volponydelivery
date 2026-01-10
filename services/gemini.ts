@@ -2,12 +2,18 @@
 import { GoogleGenAI } from "@google/genai";
 import { Restaurant } from "../types";
 
-// Always initialize with named parameters and process.env.API_KEY.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Função para obter a instância da IA de forma segura
+const getAIInstance = () => {
+  const apiKey = process.env.API_KEY || '';
+  if (!apiKey) {
+    console.warn("Gemini API Key não configurada. O assistente de IA não funcionará.");
+  }
+  return new GoogleGenAI({ apiKey });
+};
 
 const generateSystemInstruction = (restaurants: Restaurant[]) => `
-Você é o "Volpony Bot", um assistente virtual inteligente e saudável do aplicativo de delivery "Volpony Delivery".
-Sua missão é ajudar usuários a escolherem o que comer com base no cardápio disponível ATUALIZADO.
+Você é o "Volpony Bot", um assistente virtual inteligente do aplicativo de delivery "Volpony Delivery" em Arari.
+Sua missão é ajudar usuários a escolherem o que comer ou pedir com base no cardápio disponível.
 
 DADOS DO CARDÁPIO ATUAL:
 ${JSON.stringify(restaurants.map(r => ({
@@ -18,11 +24,9 @@ ${JSON.stringify(restaurants.map(r => ({
 })))}
 
 REGRAS:
-1. Seja breve, amigável e use emojis (cor verde/natureza/comida).
+1. Seja breve, amigável e use emojis verdes.
 2. Sugira itens ESPECÍFICOS dos restaurantes listados acima.
-3. Se o usuário pedir algo que não existe, sugira a alternativa mais próxima.
-4. Tente fazer "cross-selling" de forma leve.
-5. O tom de voz deve ser "energético", "fresco" e "rápido".
+3. O tom de voz deve ser prestativo e rápido.
 `;
 
 export const sendMessageToGemini = async (
@@ -31,10 +35,11 @@ export const sendMessageToGemini = async (
   currentRestaurants: Restaurant[]
 ): Promise<string> => {
   try {
-    // Basic Text Tasks: 'gemini-3-flash-preview'
+    const ai = getAIInstance();
+    if (!process.env.API_KEY) return "O assistente de IA está em manutenção (chave de API ausente). Por favor, explore o cardápio manualmente! 🍃";
+
     const model = 'gemini-3-flash-preview';
     
-    // Initializing chat with history and system instruction
     const chat = ai.chats.create({
       model: model,
       config: {
@@ -48,10 +53,9 @@ export const sendMessageToGemini = async (
       message: userMessage
     });
 
-    // Accessing text as a property from the response object
-    return result.text || "Desculpe, tive um problema ao processar seu pedido. Tente novamente!";
+    return result.text || "Desculpe, não consegui processar sua mensagem agora.";
   } catch (error) {
     console.error("Gemini API Error:", error);
-    return "Ops! Tive um problema técnico. Tente novamente em alguns segundos. 🍃";
+    return "Ops! Tive um problema técnico ao processar seu pedido. Tente novamente em alguns segundos. 🍃";
   }
 };

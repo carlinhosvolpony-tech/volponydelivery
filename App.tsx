@@ -6,8 +6,11 @@ import CartSheet from './components/CartSheet';
 import AIChat from './components/AIChat';
 import AdminPanel from './components/AdminPanel';
 import Login from './components/Login';
+import RestaurantDashboard from './components/RestaurantDashboard';
+import CourierDashboard from './components/CourierDashboard';
+import CustomerDashboard from './components/CustomerDashboard';
 import { db, INITIAL_CATEGORIES } from './services/data'; 
-import { Restaurant, MenuItem, CartItem, AppView, GlobalSettings, User, Order, Category } from './types';
+import { Restaurant, MenuItem, CartItem, AppView, GlobalSettings, User, Order, Category, OrderStatus } from './types';
 import { ArrowLeft, CheckCircle, Clock, Plus, Zap, Store, Loader2, MessageCircle, Printer, Calendar, MapPin, Hash, Edit3 } from 'lucide-react';
 
 function App() {
@@ -20,6 +23,7 @@ function App() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [settings, setSettings] = useState<GlobalSettings | null>(null);
   const [users, setUsers] = useState<User[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -31,18 +35,30 @@ function App() {
 
   const loadData = useCallback(async () => {
     try {
-      const [r, s, u] = await Promise.all([
+      const [r, s, u, o] = await Promise.all([
         db.getRestaurants(),
         db.getSettings(),
-        db.getUsers()
+        db.getUsers(),
+        db.getOrders()
       ]);
       setRestaurants(r);
       setSettings(s);
       setUsers(u);
+      setOrders(o);
+
+      // Auto-redirect lojistas e entregadores
+      const savedUserStr = localStorage.getItem('volpony_session');
+      if (savedUserStr) {
+        const uObj = JSON.parse(savedUserStr);
+        if (view === AppView.HOME || view === AppView.LOGIN) {
+          if (uObj.role === 'manager') setView(AppView.RESTAURANT_DASHBOARD);
+          if (uObj.role === 'courier') setView(AppView.COURIER_DASHBOARD);
+        }
+      }
     } catch (error) {
       console.error("Failed to load app data", error);
     }
-  }, []);
+  }, [view]);
 
   useEffect(() => {
     const init = async () => {
@@ -88,6 +104,7 @@ function App() {
     
     const newOrder: Order = {
       id: Math.random().toString(36).substr(2, 9).toUpperCase(),
+      customerId: currentUser?.id,
       customerName: currentUser?.name || 'Cliente',
       customerAddress: 'Endereço a confirmar no WhatsApp',
       items: [...cart],
@@ -112,87 +129,43 @@ function App() {
     }
   };
 
+  const handleUpdateStatus = async (orderId: string, status: OrderStatus, courierId?: string, courierName?: string) => {
+    const updated = await db.updateOrder(orderId, { status, courierId, courierName });
+    setOrders(updated);
+  };
+
   const handleSendWhatsApp = () => {
     if (!lastOrderDetails || !activeRestaurant?.whatsappNumber) return;
-    
-    // Calculamos os valores diretamente do lastOrderDetails para evitar subtotal 0
     const orderSubtotal = lastOrderDetails.items.reduce((acc, i) => acc + (i.price * i.quantity), 0);
     const orderDeliveryFee = lastOrderDetails.orderType === 'delivery' ? (activeRestaurant.deliveryFee || 0) : 0;
-    
-    // Formatação de itens estilo tabela
-    const itemsText = lastOrderDetails.items.map(i => 
-      `${i.quantity}x ${i.name}\n   R$ ${(i.price * i.quantity).toFixed(2)}`
-    ).join('\n');
+    const itemsText = lastOrderDetails.items.map(i => `${i.quantity}x ${i.name}\n   R$ ${(i.price * i.quantity).toFixed(2)}`).join('\n');
 
-    const message = `*VOLPONY DELIVERY* 🍃
---------------------------------
-*COMPROVANTE DE PEDIDO*
---------------------------------
-*LOJA:* ${activeRestaurant.name}
-*DATA:* ${new Date(lastOrderDetails.timestamp).toLocaleDateString()} ${new Date(lastOrderDetails.timestamp).toLocaleTimeString()}
-*PEDIDO:* #${lastOrderDetails.id}
-*CLIENTE:* ${lastOrderDetails.customerName}
---------------------------------
-*ITENS:*
-${itemsText}
---------------------------------
-*SUBTOTAL:* R$ ${orderSubtotal.toFixed(2)}
-*TAXA ENTREGA:* R$ ${orderDeliveryFee.toFixed(2)}
-*TOTAL:* R$ ${lastOrderDetails.total.toFixed(2)}
---------------------------------
-*TIPO:* ${lastOrderDetails.orderType === 'delivery' ? '🛵 Entrega' : '🏪 Retirada'}
-*PAGAMENTO:* ${lastOrderDetails.paymentMethod}
---------------------------------
-_Obrigado pela preferência!_`;
+    const message = `*VOLPONY DELIVERY* 🍃\n--------------------------------\n*COMPROVANTE DE PEDIDO*\n--------------------------------\n*LOJA:* ${activeRestaurant.name}\n*DATA:* ${new Date(lastOrderDetails.timestamp).toLocaleDateString()} ${new Date(lastOrderDetails.timestamp).toLocaleTimeString()}\n*PEDIDO:* #${lastOrderDetails.id}\n*CLIENTE:* ${lastOrderDetails.customerName}\n--------------------------------\n*ITENS:*\n${itemsText}\n--------------------------------\n*SUBTOTAL:* R$ ${orderSubtotal.toFixed(2)}\n*TAXA ENTREGA:* R$ ${orderDeliveryFee.toFixed(2)}\n*TOTAL:* R$ ${lastOrderDetails.total.toFixed(2)}\n--------------------------------\n*TIPO:* ${lastOrderDetails.orderType === 'delivery' ? '🛵 Entrega' : '🏪 Retirada'}\n*PAGAMENTO:* ${lastOrderDetails.paymentMethod}\n--------------------------------\n_Obrigado pela preferência!_`;
 
     const phone = activeRestaurant.whatsappNumber.replace(/\D/g, '');
     window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(message)}`, '_blank');
-  };
-
-  const canEditSelectedRestaurant = currentUser && (
-    currentUser.role === 'admin' || 
-    (currentUser.role === 'manager' && currentUser.restaurantId === selectedRestaurant?.id)
-  );
-
-  const handleDirectEdit = () => {
-    if (selectedRestaurant) {
-      setInitialEditId(selectedRestaurant.id);
-      setView(AppView.ADMIN_PANEL);
-    }
   };
 
   if (isLoading) return <div className="h-screen flex items-center justify-center bg-white"><Loader2 className="animate-spin text-brand-500" size={40} /></div>;
 
   const currentCategories = settings?.categories || INITIAL_CATEGORIES;
 
+  // Renderização de Dashboards
   if (view === AppView.ADMIN_PANEL && settings) {
-    return (
-      <AdminPanel 
-        restaurants={restaurants} 
-        settings={settings} 
-        users={users} 
-        currentUser={currentUser}
-        initialEditId={initialEditId}
-        onSaveRestaurant={async (r) => { 
-          const newR = restaurants.some(x => x.id === r.id) ? restaurants.map(x => x.id === r.id ? r : x) : [...restaurants, r];
-          setRestaurants(newR); await db.saveRestaurants(newR); 
-        }}
-        onDeleteRestaurant={async (id) => {
-          const newR = restaurants.filter(x => x.id !== id);
-          setRestaurants(newR); await db.saveRestaurants(newR);
-        }}
-        onSaveSettings={async (s) => { setSettings(s); await db.saveSettings(s); }}
-        onSaveUser={async (u) => {
-          const newU = users.some(x => x.id === u.id) ? users.map(x => x.id === u.id ? u : x) : [...users, u];
-          setUsers(newU); await db.saveUsers(newU);
-        }}
-        onDeleteUser={async (id) => {
-          const newU = users.filter(x => x.id !== id);
-          setUsers(newU); await db.saveUsers(newU);
-        }}
-        onClose={() => { setView(AppView.HOME); setInitialEditId(null); }}
-      />
-    );
+    return <AdminPanel restaurants={restaurants} settings={settings} users={users} currentUser={currentUser} initialEditId={initialEditId} onSaveRestaurant={async (r) => { const newR = restaurants.some(x => x.id === r.id) ? restaurants.map(x => x.id === r.id ? r : x) : [...restaurants, r]; setRestaurants(newR); await db.saveRestaurants(newR); }} onDeleteRestaurant={async (id) => { const newR = restaurants.filter(x => x.id !== id); setRestaurants(newR); await db.saveRestaurants(newR); }} onSaveSettings={async (s) => { setSettings(s); await db.saveSettings(s); }} onSaveUser={async (u) => { const newU = users.some(x => x.id === u.id) ? users.map(x => x.id === u.id ? u : x) : [...users, u]; setUsers(newU); await db.saveUsers(newU); }} onDeleteUser={async (id) => { const newU = users.filter(x => x.id !== id); setUsers(newU); await db.saveUsers(newU); }} onClose={() => { setView(AppView.HOME); setInitialEditId(null); }} />;
+  }
+
+  if (view === AppView.RESTAURANT_DASHBOARD && currentUser?.restaurantId) {
+    const res = restaurants.find(r => r.id === currentUser.restaurantId);
+    if (res) return <RestaurantDashboard orders={orders} restaurant={res} user={currentUser} onUpdateStatus={handleUpdateStatus} onEditRestaurant={() => { setInitialEditId(res.id); setView(AppView.ADMIN_PANEL); }} onLogout={() => { setCurrentUser(null); localStorage.removeItem('volpony_session'); setView(AppView.HOME); }} onRefresh={loadData} />;
+  }
+
+  if (view === AppView.COURIER_DASHBOARD && currentUser) {
+    return <CourierDashboard orders={orders} restaurants={restaurants} user={currentUser} onUpdateStatus={handleUpdateStatus} onLogout={() => { setCurrentUser(null); localStorage.removeItem('volpony_session'); setView(AppView.HOME); }} onRefresh={loadData} />;
+  }
+
+  if (view === AppView.CUSTOMER_DASHBOARD && currentUser) {
+    return <CustomerDashboard orders={orders} restaurants={restaurants} user={currentUser} onBackToHome={() => setView(AppView.HOME)} />;
   }
 
   return (
@@ -205,7 +178,7 @@ _Obrigado pela preferência!_`;
             <div className="bg-brand-900 rounded-3xl p-8 text-white shadow-xl relative overflow-hidden">
                <div className="relative z-10">
                  <h2 className="text-3xl font-bold mb-2">Volpony Delivery</h2>
-                 <p className="text-brand-200">Escolha o ramo, peça e receba via WhatsApp.</p>
+                 <p className="text-brand-200">O app de pedidos de Arari. Rápido e saudável.</p>
                </div>
                <Zap className="absolute right-[-20px] bottom-[-20px] text-white opacity-10 w-48 h-48" />
             </div>
@@ -226,25 +199,13 @@ _Obrigado pela preferência!_`;
         {view === AppView.RESTAURANT_DETAILS && selectedRestaurant && (
           <div className="animate-fadeIn">
             <div className="flex justify-between items-center mb-6">
-              <button onClick={() => setView(AppView.HOME)} className="flex items-center text-gray-500 hover:text-brand-600 font-bold transition-colors">
-                <ArrowLeft size={20} className="mr-2" /> Voltar
-              </button>
-              
-              {canEditSelectedRestaurant && (
-                <button 
-                  onClick={handleDirectEdit} 
-                  className="bg-dark-900 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-black transition-all shadow-md"
-                >
-                  <Edit3 size={18} /> Editar Estabelecimento
-                </button>
-              )}
+              <button onClick={() => setView(AppView.HOME)} className="flex items-center text-gray-500 hover:text-brand-600 font-bold transition-colors"><ArrowLeft size={20} className="mr-2" /> Voltar</button>
             </div>
             <div className="bg-white rounded-3xl shadow-sm border overflow-hidden mb-8">
                <img src={selectedRestaurant.image} className="w-full h-48 md:h-64 object-cover" />
                <div className="p-6">
                  <h1 className="text-3xl font-bold text-gray-800">{selectedRestaurant.name}</h1>
                  <p className="text-gray-500 flex items-center gap-1 mt-1"><Clock size={16}/> Entrega em {selectedRestaurant.deliveryTime}</p>
-                 {selectedRestaurant.active === false && <p className="mt-2 text-xs font-bold text-red-600 uppercase">Atenção: Este estabelecimento está desativado no momento.</p>}
                </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -254,23 +215,12 @@ _Obrigado pela preferência!_`;
                        <div><h3 className="font-bold text-gray-800">{item.name}</h3><p className="text-xs text-gray-500 mt-1">{item.description}</p></div>
                        <div className="flex justify-between items-center mt-4">
                           <span className="font-bold text-brand-700 text-lg">R$ {item.price.toFixed(2)}</span>
-                          <button 
-                            disabled={selectedRestaurant.active === false}
-                            onClick={() => addToCart(item)} 
-                            className={`p-2 rounded-xl shadow-sm text-white ${selectedRestaurant.active === false ? 'bg-gray-300 cursor-not-allowed' : 'bg-brand-600'}`}
-                          >
-                            <Plus size={20}/>
-                          </button>
+                          <button onClick={() => addToCart(item)} className="p-2 rounded-xl shadow-sm text-white bg-brand-600 hover:bg-brand-700 transition-colors"><Plus size={20}/></button>
                        </div>
                     </div>
                     <img src={item.image} className="w-24 h-24 rounded-2xl object-cover bg-gray-100" />
                  </div>
                ))}
-               {selectedRestaurant.menu.filter(item => item.active !== false).length === 0 && (
-                 <div className="col-span-full py-20 text-center bg-white rounded-3xl border border-dashed text-gray-400">
-                    <p>Nenhum produto disponível no momento.</p>
-                 </div>
-               )}
             </div>
           </div>
         )}
@@ -281,7 +231,7 @@ _Obrigado pela preferência!_`;
               <div className="bg-white p-6 rounded-3xl border shadow-sm space-y-6">
                  <div className="flex bg-gray-100 p-1.5 rounded-2xl">
                     <button className={`flex-1 py-3 rounded-xl font-bold transition-all ${orderType === 'delivery' ? 'bg-white text-brand-600 shadow-sm' : 'text-gray-500'}`} onClick={() => setOrderType('delivery')}>Entrega (R$ {activeRestaurant?.deliveryFee.toFixed(2)})</button>
-                    <button className={`flex-1 py-3 rounded-xl font-bold transition-all ${orderType === 'pickup' ? 'bg-white text-brand-600 shadow-sm' : 'text-gray-500'}`} onClick={() => setOrderType('pickup')}>Retirada (Grátis)</button>
+                    <button className={`flex-1 py-3 rounded-xl font-bold transition-all ${orderType === 'pickup' ? 'bg-white text-brand-600 shadow-sm' : 'text-gray-500'}`} onClick={() => setOrderType('pickup')}>Retirada</button>
                  </div>
                  <div className="space-y-3">
                     <h3 className="font-bold text-gray-700">Pagamento no Recebimento</h3>
@@ -304,76 +254,47 @@ _Obrigado pela preferência!_`;
         {view === AppView.SUCCESS && lastOrderDetails && (
           <div className="max-w-md mx-auto py-10 animate-fadeIn space-y-8">
               <div className="text-center">
-                 <div className="w-16 h-16 bg-brand-100 text-brand-600 rounded-full flex items-center justify-center mx-auto mb-4 border-2 border-brand-200">
-                    <CheckCircle size={32} />
-                 </div>
+                 <div className="w-16 h-16 bg-brand-100 text-brand-600 rounded-full flex items-center justify-center mx-auto mb-4 border-2 border-brand-200"><CheckCircle size={32} /></div>
                  <h2 className="text-2xl font-bold text-gray-800">Pedido Enviado!</h2>
                  <p className="text-gray-500 text-sm mt-1 px-10">Agora envie o cupom para o lojista via WhatsApp para validar seu pedido.</p>
               </div>
 
-              {/* CUPOM TÉRMICO VISUAL */}
               <div className="thermal-paper px-6 pt-8 pb-10 font-mono text-gray-900 border-x border-gray-100">
                  <div className="text-center space-y-1 mb-6">
-                    <div className="flex justify-center mb-2"><Zap className="text-brand-600" size={24} fill="currentColor"/></div>
-                    <h3 className="font-bold text-lg leading-tight uppercase tracking-widest">Volpony Delivery</h3>
-                    <p className="text-xs border-y border-black inline-block px-2 my-1">COMPROVANTE DE PEDIDO</p>
+                    <Zap className="text-brand-600 mx-auto" size={24} fill="currentColor"/>
+                    <h3 className="font-bold text-lg uppercase tracking-widest">Volpony Delivery</h3>
+                    <p className="text-xs border-y border-black inline-block px-2 my-1">COMPROVANTE</p>
                     <p className="text-[11px] font-bold uppercase">{activeRestaurant?.name}</p>
                  </div>
-
                  <div className="text-[10px] space-y-1 mb-4">
-                    <div className="flex justify-between"><span><Calendar size={10} className="inline mr-1"/> DATA:</span><span>{new Date(lastOrderDetails.timestamp).toLocaleDateString()} {new Date(lastOrderDetails.timestamp).toLocaleTimeString()}</span></div>
-                    <div className="flex justify-between"><span><Hash size={10} className="inline mr-1"/> PEDIDO:</span><span className="font-bold">#{lastOrderDetails.id}</span></div>
-                    <div className="flex justify-between"><span><MapPin size={10} className="inline mr-1"/> CLIENTE:</span><span className="font-bold">{lastOrderDetails.customerName}</span></div>
+                    <div className="flex justify-between"><span>DATA:</span><span>{new Date(lastOrderDetails.timestamp).toLocaleString()}</span></div>
+                    <div className="flex justify-between"><span>PEDIDO:</span><span className="font-bold">#{lastOrderDetails.id}</span></div>
+                    <div className="flex justify-between"><span>CLIENTE:</span><span className="font-bold">{lastOrderDetails.customerName}</span></div>
                  </div>
-
                  <div className="dot-divider"></div>
-
-                 <div className="space-y-3 py-2">
-                    <div className="grid grid-cols-12 text-[10px] font-bold uppercase">
-                       <span className="col-span-2 text-center">QT</span>
-                       <span className="col-span-6">ITEM</span>
-                       <span className="col-span-4 text-right">VALOR</span>
-                    </div>
+                 <div className="space-y-3 py-2 text-[11px]">
                     {lastOrderDetails.items.map((item, idx) => (
-                      <div key={idx} className="grid grid-cols-12 text-[11px]">
-                         <span className="col-span-2 text-center">{item.quantity}x</span>
-                         <span className="col-span-6 uppercase leading-tight">{item.name}</span>
-                         <span className="col-span-4 text-right">{(item.price * item.quantity).toFixed(2)}</span>
-                      </div>
+                      <div key={idx} className="flex justify-between"><span>{item.quantity}x {item.name}</span><span>{(item.price * item.quantity).toFixed(2)}</span></div>
                     ))}
                  </div>
-
                  <div className="dot-divider"></div>
-
-                 <div className="space-y-1 py-1">
-                    <div className="flex justify-between text-[11px]"><span>SUBTOTAL</span><span>R$ {lastOrderDetails.items.reduce((acc, i) => acc + (i.price * i.quantity), 0).toFixed(2)}</span></div>
-                    <div className="flex justify-between text-[11px]"><span>TAXA ENTREGA ({lastOrderDetails.orderType === 'delivery' ? 'SIM' : 'NÃO'})</span><span>R$ {(lastOrderDetails.orderType === 'delivery' ? activeRestaurant?.deliveryFee : 0)?.toFixed(2)}</span></div>
-                    <div className="flex justify-between text-base font-bold pt-2 border-t border-black mt-2">
-                       <span>TOTAL</span>
-                       <span>R$ {lastOrderDetails.total.toFixed(2)}</span>
-                    </div>
+                 <div className="space-y-1 text-[11px]">
+                    <div className="flex justify-between font-bold text-base pt-2 border-t border-black"><span>TOTAL</span><span>R$ {lastOrderDetails.total.toFixed(2)}</span></div>
                  </div>
-
-                 <div className="mt-6 pt-2 border-t border-dashed border-gray-300 text-center space-y-1">
-                    <p className="text-[10px] uppercase">Forma de Pagamento:</p>
-                    <p className="text-xs font-bold uppercase underline decoration-double">{lastOrderDetails.paymentMethod}</p>
-                    <p className="text-[9px] text-gray-400 mt-4 italic tracking-widest">--- OBRIGADO PELA PREFERENCIA ---</p>
+                 <div className="mt-6 text-center text-[10px] uppercase">
+                    <p>Pagamento: {lastOrderDetails.paymentMethod}</p>
                  </div>
               </div>
 
               <div className="space-y-3 pt-4">
-                <button onClick={handleSendWhatsApp} className="w-full bg-green-500 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-green-600 transition-colors shadow-lg shadow-green-500/20 active:scale-95">
-                  <MessageCircle size={24} /> Enviar p/ WhatsApp da Loja
-                </button>
-                <button onClick={() => setView(AppView.HOME)} className="w-full bg-white text-gray-500 py-4 rounded-2xl font-bold text-sm border hover:bg-gray-50 transition-all">
-                  Voltar ao Início
-                </button>
+                <button onClick={handleSendWhatsApp} className="w-full bg-green-500 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-green-600 transition-colors shadow-lg shadow-green-500/20"><MessageCircle size={24} /> Enviar p/ WhatsApp da Loja</button>
+                <button onClick={() => setView(AppView.HOME)} className="w-full bg-white text-gray-500 py-4 rounded-2xl font-bold text-sm border hover:bg-gray-50 transition-all">Voltar ao Início</button>
               </div>
           </div>
         )}
       </main>
 
-      {view === AppView.LOGIN && <Login users={users} onLogin={(u) => { setCurrentUser(u); localStorage.setItem('volpony_session', JSON.stringify(u)); setView(AppView.HOME); }} onRegister={async (u) => { const newU = [...users, u]; await db.saveUsers(newU); setCurrentUser(u); localStorage.setItem('volpony_session', JSON.stringify(u)); setView(AppView.HOME); }} onCancel={() => setView(AppView.HOME)} />}
+      {view === AppView.LOGIN && <Login users={users} onLogin={(u) => { setCurrentUser(u); localStorage.setItem('volpony_session', JSON.stringify(u)); if (u.role === 'manager') setView(AppView.RESTAURANT_DASHBOARD); else if (u.role === 'courier') setView(AppView.COURIER_DASHBOARD); else setView(AppView.HOME); }} onRegister={async (u) => { const newU = [...users, u]; await db.saveUsers(newU); setCurrentUser(u); localStorage.setItem('volpony_session', JSON.stringify(u)); setView(AppView.HOME); }} onCancel={() => setView(AppView.HOME)} />}
       <CartSheet isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} items={cart} onUpdateQuantity={(id, d) => setCart(prev => prev.map(i => i.id === id ? { ...i, quantity: Math.max(0, i.quantity + d) } : i).filter(i => i.quantity > 0))} onCheckout={() => { setIsCartOpen(false); setView(AppView.CHECKOUT); }} />
       <AIChat restaurants={restaurants} />
     </div>
