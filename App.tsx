@@ -51,7 +51,7 @@ function App() {
         }
       }
     } catch (error) {
-      console.error("Failed to load app data", error);
+      console.error("Erro ao carregar dados", error);
     }
   }, [selectedAddress]);
 
@@ -80,7 +80,7 @@ function App() {
     if (!selectedRestaurant) return;
     setCart(prev => {
       const isDifferent = prev.length > 0 && prev[0].restaurantId !== selectedRestaurant.id;
-      if (isDifferent && !window.confirm("Seu carrinho já tem itens de outra loja. Deseja limpar?")) return prev;
+      if (isDifferent && !window.confirm("Você já tem itens de outra loja. Deseja limpar o carrinho?")) return prev;
       let newCart = isDifferent ? [] : [...prev];
       const existing = newCart.find(i => i.id === item.id);
       if (existing) return newCart.map(i => i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i);
@@ -90,19 +90,18 @@ function App() {
   };
 
   const confirmOrder = () => {
-    if (orderType === 'delivery' && !selectedAddress) return alert("Selecione um endereço.");
+    if (orderType === 'delivery' && !selectedAddress) return alert("Por favor, selecione um endereço para entrega.");
     if (!paymentMethod) return alert("Selecione a forma de pagamento.");
     if (!activeRestaurant) return;
     
-    const formattedAddress = orderType === 'pickup' 
+    const addrText = orderType === 'pickup' 
       ? 'Retirada na Loja' 
-      : `${selectedAddress?.street}, ${selectedAddress?.number}, ${selectedAddress?.neighborhood}`;
+      : `${selectedAddress?.street}, ${selectedAddress?.number} - ${selectedAddress?.neighborhood}`;
 
-    // Fixed: Added mandatory status and customerId fields to comply with the Order interface
     const newOrder: Order = {
       id: Math.random().toString(36).substr(2, 6).toUpperCase(),
       customerName: currentUser?.name || 'Cliente',
-      customerAddress: formattedAddress,
+      customerAddress: addrText,
       items: [...cart],
       total: total,
       timestamp: Date.now(),
@@ -123,7 +122,7 @@ function App() {
   const handleSendWhatsApp = () => {
     if (!lastOrderDetails || !activeRestaurant?.whatsappNumber) return;
     const itemsText = lastOrderDetails.items.map(i => `• ${i.quantity}x ${i.name} - R$ ${(i.price * i.quantity).toFixed(2)}`).join('\n');
-    const deliveryText = lastOrderDetails.orderType === 'delivery' ? `Taxa Entrega: R$ ${effectiveDeliveryFee.toFixed(2)}` : 'Retirada na Loja';
+    const deliveryLine = lastOrderDetails.orderType === 'delivery' ? `Taxa Entrega: R$ ${effectiveDeliveryFee.toFixed(2)}` : 'Retirada na Loja';
     
     const message = `*VOLPONY DELIVERY* 🍃
 ----------------------------
@@ -131,18 +130,18 @@ function App() {
 *LOJA:* ${lastOrderDetails.restaurantName}
 ----------------------------
 *CLIENTE:* ${lastOrderDetails.customerName}
-*TIPO:* ${lastOrderDetails.orderType === 'delivery' ? 'Entrega' : 'Retirada'}
+*TIPO:* ${lastOrderDetails.orderType === 'delivery' ? '🛵 Entrega' : '🥡 Retirada'}
 *ENDEREÇO:* ${lastOrderDetails.customerAddress}
 ----------------------------
 *ITENS:*
 ${itemsText}
 ----------------------------
-${deliveryText}
+${deliveryLine}
 *TOTAL:* R$ ${lastOrderDetails.total.toFixed(2)}
 ----------------------------
 *PAGAMENTO:* ${lastOrderDetails.paymentMethod}
 ----------------------------
-_Pedido via Volpony Delivery_`;
+_Pedido feito via Volpony Delivery_`;
 
     window.open(`https://wa.me/${activeRestaurant.whatsappNumber}?text=${encodeURIComponent(message)}`, '_blank');
   };
@@ -293,7 +292,7 @@ _Pedido via Volpony Delivery_`;
                   {orderType === 'delivery' && <div className="flex justify-between"><span>Taxa de Entrega</span><span>R$ {effectiveDeliveryFee.toFixed(2)}</span></div>}
                   <div className="flex justify-between font-bold text-xl text-gray-800 pt-3 border-t"><span>Total</span><span>R$ {total.toFixed(2)}</span></div>
                 </div>
-                <button onClick={confirmOrder} className="w-full bg-brand-600 text-white py-4 rounded-2xl font-bold shadow-lg shadow-brand-100 hover:bg-brand-700 transition-all">Revisar Pedido</button>
+                <button onClick={confirmOrder} className="w-full bg-brand-600 text-white py-4 rounded-2xl font-bold shadow-lg shadow-brand-100 hover:bg-brand-700 transition-all">Confirmar Pedido</button>
               </div>
             </div>
           </div>
@@ -303,8 +302,8 @@ _Pedido via Volpony Delivery_`;
           <div className="max-w-md mx-auto py-10 px-4 animate-fadeIn">
             <div className="text-center mb-8">
                <div className="w-16 h-16 bg-brand-100 text-brand-600 rounded-full flex items-center justify-center mx-auto mb-4"><CheckCircle size={32} /></div>
-               <h2 className="text-2xl font-bold">Tudo Pronto!</h2>
-               <p className="text-gray-500 text-sm">Clique no botão abaixo para enviar o pedido via WhatsApp.</p>
+               <h2 className="text-2xl font-bold text-gray-800">Pedido Gerado!</h2>
+               <p className="text-gray-500 text-sm">Quase lá! Clique no botão abaixo para finalizar pelo WhatsApp.</p>
             </div>
 
             <div className="thermal-paper p-6 mb-8 text-sm font-mono border-t-4 border-brand-500 shadow-xl">
@@ -316,7 +315,7 @@ _Pedido via Volpony Delivery_`;
                </div>
                <div className="space-y-1 mb-4">
                   <p><b>Cliente:</b> {lastOrderDetails.customerName}</p>
-                  <p className="break-words"><b>Local:</b> {typeof lastOrderDetails.customerAddress === 'string' ? lastOrderDetails.customerAddress : `${lastOrderDetails.customerAddress.street}, ${lastOrderDetails.customerAddress.number}`}</p>
+                  <p className="break-words"><b>Local:</b> {typeof lastOrderDetails.customerAddress === 'string' ? lastOrderDetails.customerAddress : 'Endereço registrado'}</p>
                </div>
                <div className="border-b border-dashed border-gray-300 my-2"></div>
                <div className="space-y-1 mb-4">

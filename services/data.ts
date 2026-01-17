@@ -39,28 +39,29 @@ export const INITIAL_RESTAURANTS: Restaurant[] = [
     closingTime: '23:59',
     category: 'snacks',
     active: true,
-    whatsappNumber: '5598900000000',
+    whatsappNumber: '5598912345678', // Exemplo
     image: 'https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&w=800&q=80',
     menu: [
-      { id: 'b1', name: 'Volpony Classic', description: 'Blend 150g, queijo, alface e tomate.', price: 25.00, image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=400&q=80', popular: true, active: true },
-      { id: 'b2', name: 'Batata Frita G', description: 'Porção grande com cheddar e bacon.', price: 18.00, image: 'https://images.unsplash.com/photo-1573080496219-bb080dd4f877?auto=format&fit=crop&w=400&q=80', active: true }
+      { id: 'b1', name: 'Volpony Classic', description: 'Blend 150g, queijo cheddar, alface e molho da casa.', price: 25.00, image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=400&q=80', popular: true, active: true },
+      { id: 'b2', name: 'Batata Rústica', description: 'Porção crocante com sal grosso e alecrim.', price: 18.00, image: 'https://images.unsplash.com/photo-1573080496219-bb080dd4f877?auto=format&fit=crop&w=400&q=80', active: true }
     ]
   }
 ];
 
 class DatabaseService {
   private load<T>(key: string, defaultValue: T): T {
+    if (typeof window === 'undefined') return defaultValue;
     const stored = localStorage.getItem(key);
     return stored ? JSON.parse(stored) : defaultValue;
   }
 
   private save<T>(key: string, data: T): void {
+    if (typeof window === 'undefined') return;
     localStorage.setItem(key, JSON.stringify(data));
   }
 
-  // Added getCloudStatus method to provide online status to components
   getCloudStatus(): boolean {
-    return typeof navigator !== 'undefined' ? navigator.onLine : true;
+    return true; // Sempre online para este modelo estático
   }
 
   async getSettings(): Promise<GlobalSettings> { return this.load(KEYS.SETTINGS, DEFAULT_SETTINGS); }
