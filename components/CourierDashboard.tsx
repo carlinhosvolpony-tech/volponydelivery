@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect, useRef } from 'react';
-import { Order, OrderStatus, Restaurant, User } from '../types';
+import { Order, OrderStatus, Restaurant, User, Address } from '../types';
 import { Clock, MapPin, Navigation, CheckCircle, Package, LogOut, Bike, Volume2, VolumeX, Store, ArrowRight, WifiOff, Cloud, RefreshCw, Car } from 'lucide-react';
 import { db } from '../services/data';
 
@@ -25,30 +26,17 @@ const CourierDashboard: React.FC<CourierDashboardProps> = ({
   const previousReadyCount = useRef(0);
   const isOnline = db.getCloudStatus();
   
-  // Get linked restaurants (Establishments or Taxi Services)
   const myRestaurants = restaurants.filter(r => user.courierRestaurantIds?.includes(r.id));
   const myRestaurantIds = myRestaurants.map(r => r.id);
 
-  // Filter Orders for Display
   const availableOrders = orders.filter(o => {
-    // 1. Must be linked to a restaurant/service the courier works for
     const isLinked = myRestaurantIds.includes(o.restaurantId);
     if (!isLinked) return false;
-
-    // 2. Must not be taken by another courier
     if (o.courierId) return false;
-
-    // 3. Logic by Type
     const restaurant = restaurants.find(r => r.id === o.restaurantId);
     const isTaxi = restaurant?.category === 'taxi';
-
-    if (isTaxi) {
-        // Taxi orders are available as soon as they are 'pending' (no cooking time)
-        return o.status === 'pending';
-    } else {
-        // Food orders are available only when 'ready' (cooked)
-        return o.status === 'ready' && o.orderType === 'delivery';
-    }
+    if (isTaxi) return o.status === 'pending';
+    return o.status === 'ready' && o.orderType === 'delivery';
   });
 
   const activeDeliveries = orders.filter(o => 
@@ -56,7 +44,6 @@ const CourierDashboard: React.FC<CourierDashboardProps> = ({
     (o.status === 'heading_to_pickup' || o.status === 'delivering')
   );
 
-  // Sound Notification Logic
   useEffect(() => {
     if (availableOrders.length > previousReadyCount.current) {
       if (soundEnabled) {
@@ -69,7 +56,6 @@ const CourierDashboard: React.FC<CourierDashboardProps> = ({
 
   const handleTakeOrder = (orderId: string, isTaxi: boolean) => {
     if (!user.id) return alert("Erro de identificação. Faça login novamente.");
-    
     if(confirm(isTaxi ? "Aceitar esta corrida?" : "Aceitar esta entrega?")) {
       onUpdateStatus(orderId, 'heading_to_pickup', user.id, user.name);
       setActiveTab('active');
@@ -88,9 +74,13 @@ const CourierDashboard: React.FC<CourierDashboardProps> = ({
     }
   };
 
+  const formatAddress = (addr: string | Address): string => {
+    if (typeof addr === 'string') return addr;
+    return `${addr.street}, ${addr.number} - ${addr.neighborhood}`;
+  };
+
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* Header */}
       <header className="bg-dark-900 text-white shadow-lg sticky top-0 z-20">
         <div className="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center">
           <div className="flex items-center gap-3">
@@ -139,7 +129,6 @@ const CourierDashboard: React.FC<CourierDashboardProps> = ({
         </div>
       </header>
 
-      {/* Tabs */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-4xl mx-auto flex">
           <button 
@@ -160,19 +149,6 @@ const CourierDashboard: React.FC<CourierDashboardProps> = ({
       </div>
 
       <div className="max-w-4xl mx-auto p-4">
-        {!soundEnabled && activeTab === 'available' && availableOrders.length > 0 && (
-           <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg mb-4 text-sm flex items-center justify-between">
-              <span>Ative o som para saber quando novos pedidos chegarem!</span>
-              <button onClick={() => setSoundEnabled(true)} className="text-yellow-900 font-bold underline">Ativar</button>
-           </div>
-        )}
-        
-        {myRestaurants.length === 0 && (
-           <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg mb-4 text-sm">
-              Você não está vinculado a nenhum estabelecimento. Peça para o Admin adicionar seu ID no Painel.
-           </div>
-        )}
-
         <div className="space-y-4">
           {activeTab === 'available' && (
             <>
@@ -180,7 +156,6 @@ const CourierDashboard: React.FC<CourierDashboardProps> = ({
                 <div className="text-center py-20 text-gray-400">
                    <Clock size={48} className="mx-auto mb-4 opacity-30 animate-pulse" />
                    <p>Aguardando novas solicitações...</p>
-                   <p className="text-sm mt-2">Monitorando {myRestaurants.length} serviços.</p>
                 </div>
               ) : (
                 availableOrders.map(order => {
@@ -200,28 +175,16 @@ const CourierDashboard: React.FC<CourierDashboardProps> = ({
                          <span className="font-bold text-gray-900">R$ {order.total.toFixed(2)}</span>
                       </div>
                       
-                      {/* Origin */}
                       <div className="flex items-start gap-3 mb-4">
                          <div className="mt-1 bg-gray-100 p-2 rounded-lg">
                            {isTaxi ? <MapPin size={20} className="text-blue-600"/> : <Store size={20} className="text-gray-600" />}
                          </div>
                          <div>
                             <p className="text-xs text-gray-500 uppercase font-bold">{isTaxi ? 'Buscar Passageiro em' : 'Retirar em'}</p>
-                            {isTaxi ? (
-                                <>
-                                  <h3 className="font-bold text-gray-800">{order.customerAddress}</h3>
-                                  <p className="text-sm text-gray-600">{order.customerName}</p>
-                                </>
-                            ) : (
-                                <>
-                                  <h3 className="font-bold text-gray-800">{restaurant?.name}</h3>
-                                  <p className="text-sm text-gray-600">Av. Gastronômica, 100</p>
-                                </>
-                            )}
+                            <h3 className="font-bold text-gray-800">{formatAddress(order.customerAddress)}</h3>
                          </div>
                       </div>
 
-                      {/* Destination */}
                       {(!isTaxi || (isTaxi && order.items[0]?.description)) && (
                         <div className="flex items-start gap-3 mb-4">
                            <div className="mt-1 bg-brand-50 p-2 rounded-lg">
@@ -229,15 +192,8 @@ const CourierDashboard: React.FC<CourierDashboardProps> = ({
                            </div>
                            <div>
                               <p className="text-xs text-gray-500 uppercase font-bold">{isTaxi ? 'Levar Para' : 'Entregar para'}</p>
-                              {isTaxi ? (
-                                  <h3 className="font-bold text-gray-800">{order.items[0]?.description || "Destino a informar"}</h3>
-                              ) : (
-                                  <>
-                                    <h3 className="font-bold text-gray-800">{order.customerName}</h3>
-                                    <p className="text-sm text-gray-600">{order.customerAddress}</p>
-                                  </>
-                              )}
-                              {order.deliveryDistance && <p className="text-xs text-blue-600 font-medium mt-1">~ {order.deliveryDistance} km</p>}
+                              <h3 className="font-bold text-gray-800">{isTaxi ? (order.items[0]?.description || "Destino a informar") : order.customerName}</h3>
+                              {!isTaxi && <p className="text-sm text-gray-600">{formatAddress(order.customerAddress)}</p>}
                            </div>
                         </div>
                       )}
@@ -281,33 +237,21 @@ const CourierDashboard: React.FC<CourierDashboardProps> = ({
                    </div>
                    <div className="p-5">
                       <div className="mb-6 relative pl-4 border-l-2 border-dashed border-gray-300 space-y-6">
-                        {/* Step 1: Origin */}
                         <div className={`relative transition-opacity duration-300 ${!isHeadingToPickup ? 'opacity-50' : 'opacity-100'}`}>
                            <div className={`absolute -left-[23px] top-0 border-4 border-white w-4 h-4 rounded-full shadow-sm transition-colors duration-300 ${isHeadingToPickup ? 'bg-orange-500 scale-125' : 'bg-gray-400'}`}></div>
                            <p className="text-xs text-gray-500 uppercase">{isTaxi ? 'Embarque' : 'Coleta'}</p>
-                           {isTaxi ? (
-                             <p className="font-bold text-gray-800">{order.customerAddress}</p>
-                           ) : (
-                             <p className="font-bold text-gray-800">{restaurant?.name}</p>
-                           )}
+                           <p className="font-bold text-gray-800">{isTaxi ? formatAddress(order.customerAddress) : restaurant?.name}</p>
                         </div>
                         
-                        {/* Step 2: Destination */}
                         <div className={`relative transition-opacity duration-300 ${isHeadingToPickup ? 'opacity-50' : 'opacity-100'}`}>
                            <div className={`absolute -left-[23px] top-0 border-4 border-white w-4 h-4 rounded-full shadow-sm transition-colors duration-300 ${!isHeadingToPickup ? 'bg-brand-600 scale-125' : 'bg-gray-400'}`}></div>
                            <p className="text-xs text-gray-500 uppercase">{isTaxi ? 'Desembarque' : 'Entrega'}</p>
-                           {isTaxi ? (
-                             <p className="font-bold text-gray-800 text-lg">{order.items[0]?.description || "Destino Informado"}</p>
-                           ) : (
-                             <>
-                                <p className="font-bold text-gray-800 text-lg">{order.customerName}</p>
-                                <p className="text-gray-600">{order.customerAddress}</p>
-                             </>
-                           )}
+                           <p className="font-bold text-gray-800 text-lg">{isTaxi ? (order.items[0]?.description || "Destino") : order.customerName}</p>
+                           {!isTaxi && <p className="text-gray-600">{formatAddress(order.customerAddress)}</p>}
                            
                            {!isHeadingToPickup && (
                               <a 
-                                href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(isTaxi ? (order.items[0]?.description || '') : order.customerAddress)}`}
+                                href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(formatAddress(isTaxi ? (order.items[0]?.description || '') : order.customerAddress))}`}
                                 target="_blank"
                                 rel="noreferrer"
                                 className="text-brand-600 text-sm font-medium hover:underline mt-1 inline-block"

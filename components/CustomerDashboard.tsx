@@ -62,6 +62,11 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ orders, restauran
     localStorage.setItem('volpony_session', JSON.stringify(updatedUser));
   };
 
+  const formatAddress = (addr: string | Address): string => {
+    if (typeof addr === 'string') return addr;
+    return `${addr.street}, ${addr.number} - ${addr.neighborhood}`;
+  };
+
   const getStatusInfo = (status: OrderStatus, orderType: string) => {
      switch(status) {
        case 'pending': return { label: 'Aguardando Loja', icon: <Clock size={14}/>, color: 'text-yellow-600', bg: 'bg-yellow-100' };
@@ -140,8 +145,8 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ orders, restauran
                         
                         <div className="flex justify-between items-center pt-3 border-t border-dashed text-sm">
                            <div className="flex flex-col">
-                             <span className="text-[10px] font-bold text-gray-400 uppercase">Pagamento</span>
-                             <span className="text-xs text-gray-700 font-medium">{order.paymentMethod}</span>
+                             <span className="text-[10px] font-bold text-gray-400 uppercase">Endereço</span>
+                             <span className="text-xs text-gray-700 font-medium">{formatAddress(order.customerAddress)}</span>
                            </div>
                            <div className="text-right">
                              <span className="text-[10px] font-bold text-gray-400 uppercase block">Total</span>
@@ -172,7 +177,6 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ orders, restauran
                             {addr.isDefault && <span className="text-[9px] bg-brand-500 text-white px-1.5 py-0.5 rounded uppercase">Principal</span>}
                           </h4>
                           <p className="text-xs text-gray-500">{addr.street}, {addr.number}</p>
-                          <p className="text-[10px] text-gray-400 font-medium uppercase">{addr.neighborhood}, Volpony City</p>
                        </div>
                        <button 
                         onClick={() => handleDeleteAddress(addr.id)}
@@ -227,11 +231,6 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ orders, restauran
                  <div>
                     <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Bairro</label>
                     <input required value={addressForm.neighborhood} onChange={e => setAddressForm({...addressForm, neighborhood: e.target.value})} className="w-full border rounded-xl p-3 text-sm bg-gray-50 outline-none focus:ring-2 focus:ring-brand-500" placeholder="Ex: Centro" />
-                 </div>
-
-                 <div>
-                    <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Complemento / Referência</label>
-                    <input value={addressForm.complement} onChange={e => setAddressForm({...addressForm, complement: e.target.value})} className="w-full border rounded-xl p-3 text-sm bg-gray-50 outline-none focus:ring-2 focus:ring-brand-500" placeholder="Perto de..." />
                  </div>
 
                  <div className="flex gap-3 pt-4">

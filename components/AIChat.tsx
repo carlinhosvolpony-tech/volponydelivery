@@ -1,4 +1,5 @@
 
+import { GoogleGenAI } from "@google/genai";
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageCircle, X, Send, Sparkles } from 'lucide-react';
 import { sendMessageToGemini } from '../services/gemini';
@@ -33,9 +34,10 @@ const AIChat: React.FC<AIChatProps> = ({ restaurants }) => {
     setInputText('');
     setIsLoading(true);
 
+    // Ajuste aqui: enviando apenas o texto conforme esperado pelo serviço
     const history = messages.map(m => ({
         role: m.role,
-        parts: [{ text: m.text }]
+        text: m.text
     }));
 
     const responseText = await sendMessageToGemini(history, userMsg.text, restaurants);
