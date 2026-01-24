@@ -1,0 +1,7 @@
+{
+  "name": "Volpony Delivery",
+  "description": "Volpony Delivery - Rapidez e qualidade na sua porta em um clique.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}

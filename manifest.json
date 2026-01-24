@@ -1,0 +1,22 @@
+
+{
+  "name": "Volpony Delivery",
+  "short_name": "Volpony",
+  "description": "Volpony Delivery - Rapidez e qualidade na sua porta em um clique.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#eefcf4",
+  "theme_color": "#00b341",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/7541/7541900.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/7541/7541900.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
